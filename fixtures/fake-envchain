@@ -1,0 +1,4 @@
+#!/bin/sh
+printf 'fake envchain namespace=%s\n' "$1"
+shift
+exec "$@"

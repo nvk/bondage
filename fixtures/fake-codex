@@ -1,0 +1,2 @@
+#!/bin/sh
+printf 'fake codex args=%s\n' "$*"

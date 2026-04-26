@@ -1,0 +1,6 @@
+{
+  "name": "fake-pi",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "dist/cli.js"
+}

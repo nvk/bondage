@@ -1,0 +1,23 @@
+#!/bin/sh
+printf 'fake nono args=%s\n' "$*"
+
+[ "$1" = "run" ] || {
+  echo "fake nono: expected run subcommand" >&2
+  exit 1
+}
+shift
+
+if [ "$1" = "--profile" ]; then
+  [ $# -ge 2 ] || {
+    echo "fake nono: missing profile name" >&2
+    exit 1
+  }
+  shift 2
+fi
+
+[ $# -gt 0 ] || {
+  echo "fake nono: missing program" >&2
+  exit 1
+}
+
+exec "$@"
