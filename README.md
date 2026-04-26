@@ -15,6 +15,9 @@ FreeBSD/Capsicum-style trusted launcher:
 - exact absolute execution paths
 - no shell logic in the security boundary
 
+For the trust model and deployment shape, see
+[`TRUST_MODEL.md`](TRUST_MODEL.md).
+
 ## Build
 
 ```sh
@@ -35,9 +38,9 @@ make
 If `config` is omitted, `./bondage.conf` is used.
 
 An example config lives at [`bondage.conf.example`](bondage.conf.example).
+It is intentionally a small schema/sample file, not the full local profile matrix.
 The local `./bondage.conf` in this checkout is gitignored and can pin directly to
-the envchain-xtra `touch-id` PR worktree plus the live agent artifacts on this
-machine.
+the live agent artifacts on this machine.
 
 ## Current status
 
@@ -68,12 +71,8 @@ Implemented now:
 - end-to-end fake execution for:
   - native target
   - script target + pinned interpreter + package tree
-
-Not implemented yet:
-
-- thin-wrapper cutover from the existing shell functions
-- explicit `nono` profile directory configuration for environments where `nono`
-  cannot discover `~/.config/nono/profiles` normally
+- explicit `nono_profile_root` support so short profile names expand to real JSON profile paths
+- real thin-wrapper cutover from the shell functions for the local agent stack
 
 Notes:
 
@@ -81,3 +80,5 @@ Notes:
   like `custom-claude`
 - the local config now carries the real tier matrix:
   `base`, `-mid`, `-plugin`, `-unsafe`, `-dotfiles`, and `-rawdog`
+- the intended shell shape is now thin convenience only:
+  names, tab colors, and small prompt-shaping helpers
