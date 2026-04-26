@@ -20,6 +20,9 @@ FreeBSD/Capsicum-style trusted launcher:
 For the trust model and deployment shape, see
 [`TRUST_MODEL.md`](TRUST_MODEL.md).
 
+Start with [`GETTING_STARTED.md`](GETTING_STARTED.md) if you want to install
+and use `bondage` on a new machine.
+
 ## Build
 
 ```sh
@@ -45,6 +48,9 @@ cd bondage
 make
 ```
 
+The Homebrew formula installs only the binary. Your local config, pinned tool
+artifacts, and thin shell wrappers remain your responsibility.
+
 ## Current commands
 
 ```sh
@@ -62,6 +68,12 @@ An example config lives at [`bondage.conf.example`](bondage.conf.example).
 It is intentionally a small schema/sample file, not the full local profile matrix.
 The local `./bondage.conf` in this checkout is gitignored and can pin directly to
 the live agent artifacts on this machine.
+
+Important:
+
+- paths in the sample config are literal absolute paths
+- `bondage` does not expand shell variables inside the config
+- the sample config is a pattern to adapt, not a file to use unchanged
 
 ## Current status
 
