@@ -11,6 +11,23 @@ shell name -> bondage -> [envchain] -> [nono] -> exact pinned tool
 `bondage` is just the launcher. It does not install your tools, your
 `nono` profiles, or your local `envchain` secrets for you.
 
+## Why You Need It
+
+The point is not aesthetic purity. The point is that coding agents are useful
+but too dangerous to run loose with:
+
+- live API keys and other secrets
+- mutable dependency trees you did not meaningfully audit
+- broad ambient environment access from your normal shell session
+
+`bondage` does not solve acquisition-time trust. It does not make a bad npm
+tree good. What it does do is force the launch boundary to become explicit:
+exact artifact set, optional secret release, optional sandbox, exact argv.
+
+This setup also leans on the OS where it makes sense. On macOS, that means
+using Keychain as the real secret store and using OS-level signing identity
+where available as part of approval and drift detection.
+
 ## What You Need
 
 - `bondage`

@@ -1,3 +1,12 @@
+```text
+    ____                  __
+   / __ )____  ____  ____/ /___ _____ ____
+  / __  / __ \/ __ \/ __  / __ `/ __ `/ _ \
+ / /_/ / /_/ / / / / /_/ / /_/ / /_/ /  __/
+/_____/\____/_/ /_/\__,_/\__,_/\__, /\___/
+                              /____/
+```
+
 # Bondage. Agent Bondage.
 
 `bondage-core` is the local C launcher/policy engine.
@@ -7,6 +16,22 @@ Runtime shape:
 ```text
 alias -> bondage -> envchain-xtra -> nono -> exact target
 ```
+
+Why bother:
+
+- you cannot let coding agents run loose with live keys
+- you cannot assume a familiar command implies a trustworthy dependency tree
+- you should not grant broad ambient environment access by default
+
+`bondage` exists to narrow that trust boundary at launch time. It does not make
+bad dependencies good. It makes the launch decision explicit: exact paths,
+exact hashes, explicit secret release, explicit sandbox profile, then exact
+target.
+
+It also assumes the OS should do the parts the OS is good at. On macOS that
+means leveraging code-signing identity where available for approvals, and
+letting Keychain remain the underlying secret store instead of trying to
+replace it inside the launcher.
 
 This repository is intentionally small and local-first. The design goal is a
 FreeBSD/Capsicum-style trusted launcher:
