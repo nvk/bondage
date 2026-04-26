@@ -1,6 +1,8 @@
-# bondage-core
+# Bondage. Agent Bondage.
 
-Local C launcher/policy engine for:
+`bondage-core` is the local C launcher/policy engine.
+
+Runtime shape:
 
 ```text
 alias -> bondage -> envchain-xtra -> nono -> exact target
@@ -21,6 +23,25 @@ For the trust model and deployment shape, see
 ## Build
 
 ```sh
+make
+```
+
+## Install
+
+Homebrew tap install:
+
+```sh
+brew tap nvk/tap
+brew install nvk/tap/agent-bondage
+```
+
+The formula name is `agent-bondage`, but it installs the `bondage` executable.
+
+Source build for development:
+
+```sh
+git clone https://github.com/nvk/bondage.git
+cd bondage
 make
 ```
 
@@ -82,3 +103,8 @@ Notes:
   `base`, `-mid`, `-plugin`, `-unsafe`, `-dotfiles`, and `-rawdog`
 - the intended shell shape is now thin convenience only:
   names, tab colors, and small prompt-shaping helpers
+
+## Release Notes
+
+For release/tag and tap update steps, see
+[`RELEASING.md`](RELEASING.md).

@@ -1,4 +1,6 @@
-# Trust Model
+# Bondage. Agent Bondage.
+
+## Trust Model
 
 `bondage-core` is the trusted launcher for the local AI agent stack.
 
