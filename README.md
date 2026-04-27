@@ -33,6 +33,10 @@ means leveraging code-signing identity where available for approvals, and
 letting Keychain remain the underlying secret store instead of trying to
 replace it inside the launcher.
 
+That matters in practice for tools like Claude Code on macOS: if you use the
+normal Claude.ai/OAuth login flow, your default Claude profile should keep
+Keychain access or the login may fail to persist across sessions.
+
 This repository is intentionally small and local-first. The design goal is a
 FreeBSD/Capsicum-style trusted launcher:
 

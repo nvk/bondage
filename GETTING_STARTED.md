@@ -188,6 +188,20 @@ If a profile does not need secret release, prefer:
 
 - `use_envchain = false`
 
+### macOS Claude Code auth
+
+If you use Claude Code on macOS with the normal Claude.ai web/OAuth login,
+do not make your default Claude profile a no-Keychain profile.
+
+Claude Code persists OAuth/API credentials in the macOS Keychain. If you
+remove Keychain access from the normal Claude profile, you can end up
+re-authenticating every new session.
+
+Practical rule:
+
+- normal Claude.ai/OAuth profile on macOS -> allow Keychain
+- no-Keychain Claude profile -> reserve for API-key-only or experimental use
+
 ### nono
 
 Use `nono` for the sandboxed tiers.
