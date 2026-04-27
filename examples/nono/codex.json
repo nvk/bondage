@@ -1,0 +1,15 @@
+{
+  "extends": "codex",
+  "meta": {
+    "name": "codex",
+    "description": "Codex with project-only access"
+  },
+  "policy": {
+    "add_deny_access": [
+      "/Volumes"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  }
+}

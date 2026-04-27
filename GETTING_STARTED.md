@@ -91,6 +91,10 @@ mkdir -p ~/.config/bondage
 Then create `~/.config/bondage/bondage.conf` from the example in this
 repository and edit it so it matches your machine.
 
+For the sandbox side, start from the matching JSON examples in
+[`examples/nono/`](examples/nono/), then copy and rename only the profiles you
+actually use into `~/.config/nono/profiles/`.
+
 Important:
 
 - use absolute paths
@@ -98,6 +102,7 @@ Important:
 - point `nono_profile_root` at your local profile directory
 - point `tool_root` at your own immutable tool tree
 - remove any profile you do not actually use
+- replace the sample `nono` profile names if your local setup uses different names
 
 The sample config is not meant to be copied unchanged.
 

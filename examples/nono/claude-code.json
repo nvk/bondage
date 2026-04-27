@@ -1,0 +1,15 @@
+{
+  "extends": "claude-code",
+  "meta": {
+    "name": "claude-code",
+    "description": "Claude Code with project-only access and persistent auth on macOS"
+  },
+  "policy": {
+    "add_deny_access": [
+      "/Volumes"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "opencode",
+  "meta": {
+    "name": "opencode",
+    "description": "OpenCode with project-only access and envchain-backed provider keys"
+  },
+  "policy": {
+    "add_deny_access": [
+      "/Volumes"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  }
+}

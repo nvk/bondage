@@ -1,0 +1,18 @@
+{
+  "extends": "default",
+  "meta": {
+    "name": "llama-chat",
+    "description": "llama.cpp chat with read-only model access"
+  },
+  "policy": {
+    "add_deny_access": [
+      "/Volumes"
+    ],
+    "add_allow_read": [
+      "$HOME/models/llama.cpp"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  }
+}

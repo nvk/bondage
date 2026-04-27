@@ -1,0 +1,18 @@
+{
+  "extends": "default",
+  "meta": {
+    "name": "pi",
+    "description": "Pi with envchain-backed provider keys and writable local state"
+  },
+  "policy": {
+    "add_deny_access": [
+      "/Volumes"
+    ],
+    "add_allow_readwrite": [
+      "$HOME/.pi"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  }
+}

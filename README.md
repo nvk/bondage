@@ -98,11 +98,15 @@ It is intentionally a small schema/sample file, not the full local profile matri
 The local `./bondage.conf` in this checkout is gitignored and can pin directly to
 the live agent artifacts on this machine.
 
+Minimal starter `nono` profiles live in [`examples/nono/`](examples/nono/).
+Those are the sandbox-side companions to the sample launcher config.
+
 Important:
 
 - paths in the sample config are literal absolute paths
 - `bondage` does not expand shell variables inside the config
 - the sample config is a pattern to adapt, not a file to use unchanged
+- the `examples/nono/` profiles are starter patterns, not a complete local tier matrix
 
 ## Current status
 
