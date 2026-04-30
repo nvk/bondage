@@ -24,7 +24,7 @@ The Homebrew tap formula is:
 From the local repo:
 
 ```zsh
-git tag -a v0.1.0 -m 'bondage 0.1.0'
+git tag -a v0.2.0 -m 'bondage 0.2.0'
 git push origin main --follow-tags
 ```
 
@@ -32,7 +32,7 @@ Then update the tap formula and push it:
 
 ```zsh
 git -C "$HOME/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox/homebrew-tap" add Formula/agent-bondage.rb README.md RELEASING.md
-git -C "$HOME/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox/homebrew-tap" commit -m 'agent-bondage 0.1.0'
+git -C "$HOME/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox/homebrew-tap" commit -m 'agent-bondage 0.2.0'
 git -C "$HOME/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox/homebrew-tap" push origin main
 ```
 
