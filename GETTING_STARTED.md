@@ -66,6 +66,22 @@ One workable layout is:
 ~/bin/
 ```
 
+For shell startup itself, prefer tiny stable files in `$HOME` that source the
+real repo-backed shell config when readable. Do not make your login shell depend
+directly on a fragile repo symlink. A simple pattern is:
+
+```sh
+# ~/.zshrc
+if [ -r "$HOME/src-repo/.dotfiles/zsh/.zshrc" ]; then
+  . "$HOME/src-repo/.dotfiles/zsh/.zshrc"
+elif [ -r "$HOME/src-repo/.dotfiles/ai/shell.zsh" ]; then
+  . "$HOME/src-repo/.dotfiles/ai/shell.zsh"
+fi
+```
+
+The launcher stack should survive a temporarily unreadable repo path without
+dropping you onto raw binaries by accident.
+
 Example artifact layout:
 
 ```text
@@ -183,6 +199,16 @@ Bad:
 
 If the shell starts growing real security logic again, the design is drifting.
 
+If you keep multiple tiers, use explicit names that describe policy rather than
+vibes. A practical split is:
+
+- normal tier
+- broader but still sandboxed tier like `*-unsafe`
+- explicit no-sandbox tier like `*-rawdog`
+- optional repair tier like `*-fix` for launcher and config maintenance
+
+The repair tier is worth naming if you maintain a more complex local stack.
+
 ## Optional Pieces
 
 ### envchain
@@ -237,3 +263,22 @@ bondage exec codex ~/.config/bondage/bondage.conf -- --help
 ```
 
 If those work, then add your shell wrappers.
+
+## After upgrades
+
+Treat package-manager upgrades as launcher changes, not just tool updates.
+
+Minimum post-upgrade checks:
+
+```sh
+bondage verify codex ~/.config/bondage/bondage.conf
+bondage verify claude ~/.config/bondage/bondage.conf
+bondage argv codex ~/.config/bondage/bondage.conf -- --help
+```
+
+Then open a fresh login shell and confirm your wrapper names still resolve to
+the expected shell functions.
+
+If you use helper scripts for denial diagnostics or restart suggestions, test
+those too. Paths with spaces, quotes, and punctuation are normal on macOS and
+should be handled deliberately, not with naive whitespace splitting.

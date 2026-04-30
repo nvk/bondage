@@ -52,6 +52,39 @@ For the trust model and deployment shape, see
 Start with [`GETTING_STARTED.md`](GETTING_STARTED.md) if you want to install
 and use `bondage` on a new machine.
 
+## Operational lessons
+
+The launcher architecture is only half the story. The operational glue matters
+too. A stack like this gets brittle when shell startup, upgrade paths, or
+helper scripts quietly become part of the trust boundary.
+
+Public lessons worth keeping:
+
+- keep home-shell startup files tiny and stable; let them source the real repo
+  config when readable, instead of making the login shell depend directly on a
+  fragile repo symlink
+- keep shell wrappers thin; if real policy lives in shell again, the design has
+  drifted
+- treat package-manager upgrades as launch-policy events: repin, verify, then
+  promote
+- keep a named repair tier for fixing the launcher stack itself
+- treat helper scripts and denial hooks as testable code, not disposable glue
+
+In practice that means:
+
+```text
+stable home bootstrap stub
+  -> readable wrapper file
+  -> bondage
+  -> [envchain-xtra]
+  -> [nono]
+  -> exact pinned tool
+```
+
+The point is not ceremony. It is to avoid a situation where one unreadable
+startup file or one stale package-manager path silently drops you onto the raw
+binary you were trying not to trust.
+
 ## Build
 
 ```sh
@@ -107,6 +140,22 @@ Important:
 - `bondage` does not expand shell variables inside the config
 - the sample config is a pattern to adapt, not a file to use unchanged
 - the `examples/nono/` profiles are starter patterns, not a complete local tier matrix
+
+## Upgrade discipline
+
+Treat upgrades to `bondage`, `nono`, agent binaries, interpreters, or package
+trees as explicit change events.
+
+Minimum checklist:
+
+```sh
+bondage verify codex ~/.config/bondage/bondage.conf
+bondage verify claude ~/.config/bondage/bondage.conf
+bondage argv codex ~/.config/bondage/bondage.conf -- --help
+```
+
+Then open a fresh shell and confirm the wrapper names still resolve to shell
+functions rather than silently falling through to raw binaries.
 
 ## Current status
 
