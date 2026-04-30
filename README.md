@@ -118,6 +118,7 @@ artifacts, and thin shell wrappers remain your responsibility.
 ```sh
 ./bondage status [config]
 ./bondage verify <profile> [config]
+./bondage repin <profile> [config]
 ./bondage argv <profile> [config] [-- args...]
 ./bondage exec <profile> [config] [-- args...]
 ./bondage hash-file <absolute-path>
@@ -149,10 +150,26 @@ trees as explicit change events.
 Minimum checklist:
 
 ```sh
+bondage repin codex ~/.config/bondage/bondage.conf
+bondage repin claude ~/.config/bondage/bondage.conf
 bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify claude ~/.config/bondage/bondage.conf
 bondage argv codex ~/.config/bondage/bondage.conf -- --help
 ```
+
+`repin` is the command that removes the dumb manual step. It rewrites the
+selected profile family in place, refreshes fingerprints, canonicalizes live
+symlinked tool paths, and follows Homebrew version moves under `Cellar/` and
+`Caskroom/` before re-verifying the result.
+
+In practice:
+
+- `bondage repin codex ...` updates every Codex-tier profile sharing the same
+  pinned target
+- `bondage repin opencode ...` can also refresh the pinned interpreter and
+  package tree for script-based tools
+- global helpers like `nono`, `envchain`, and `touchid-check` are repinned too
+  when that profile type depends on them
 
 Then open a fresh shell and confirm the wrapper names still resolve to shell
 functions rather than silently falling through to raw binaries.
@@ -164,6 +181,7 @@ Implemented now:
 - hand-written INI-ish config parser
 - `status`
 - `verify`
+- `repin`
 - `argv`
 - `exec`
 - `hash-file`

@@ -4,7 +4,7 @@ CPPFLAGS ?= -Iinclude
 LDFLAGS ?=
 
 BIN := bondage
-OBJ := src/main.o src/config.o src/verify.o src/launch.o
+OBJ := src/main.o src/config.o src/verify.o src/launch.o src/repin.o
 
 .PHONY: all clean
 

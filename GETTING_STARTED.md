@@ -159,6 +159,18 @@ Typical cases:
 - interpreter: `hash-file`
 - JS package directory: `hash-tree`
 
+After an upgrade, do not hand-edit versioned paths and hashes unless you are
+recovering from something more broken than usual. Use:
+
+```sh
+bondage repin codex ~/.config/bondage/bondage.conf
+bondage repin pi ~/.config/bondage/bondage.conf
+```
+
+`repin` rewrites the matching profile family in place, refreshes the hashes,
+canonicalizes symlinked helper paths like Homebrew shims, follows moved
+`Cellar/` or `Caskroom/` versions, and then re-verifies the result.
+
 ## Verify Before Exec
 
 Before wiring up shell wrappers, verify each profile explicitly:
@@ -180,6 +192,15 @@ Only after that should you use:
 ```sh
 bondage exec codex ~/.config/bondage/bondage.conf -- --help
 ```
+
+For ongoing maintenance, the upgrade loop should now be:
+
+```sh
+bondage repin codex ~/.config/bondage/bondage.conf
+bondage verify codex ~/.config/bondage/bondage.conf
+```
+
+Only fall back to manual config edits if `repin` cannot infer the new path.
 
 ## Thin Shell Wrappers
 

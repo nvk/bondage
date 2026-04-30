@@ -4,6 +4,7 @@
 #include "config.h"
 #include "launch.h"
 #include "main.h"
+#include "repin.h"
 #include "verify.h"
 
 static const char *
@@ -19,11 +20,12 @@ bondage_usage(const char *progname)
           "Usage:\n"
           "  %s status [config]\n"
           "  %s verify <profile> [config]\n"
+          "  %s repin <profile> [config]\n"
           "  %s argv <profile> [config] [-- args...]\n"
           "  %s exec <profile> [config] [-- args...]\n"
           "  %s hash-file <absolute-path>\n"
           "  %s hash-tree <absolute-path>\n",
-          progname, progname, progname, progname, progname, progname);
+          progname, progname, progname, progname, progname, progname, progname);
 }
 
 static int
@@ -265,6 +267,15 @@ bondage_main(int argc, char **argv)
     }
     if (argc >= 4) config_path = argv[3];
     return bondage_verify(argv[2], config_path);
+  }
+
+  if (strcmp(argv[1], "repin") == 0) {
+    if (argc < 3) {
+      bondage_usage(argv[0]);
+      return 2;
+    }
+    if (argc >= 4) config_path = argv[3];
+    return bondage_repin(argv[2], config_path);
   }
 
   if (strcmp(argv[1], "hash-file") == 0) {

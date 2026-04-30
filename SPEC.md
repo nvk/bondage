@@ -39,6 +39,7 @@ Implemented now:
 
 - direct file hashing
 - package tree hashing
+- config rewrite + `repin` for versioned tool moves
 - exact argv construction
 - optional `envchain`
 - optional `nono`
