@@ -19,13 +19,16 @@ bondage_usage(const char *progname)
   fprintf(stderr,
           "Usage:\n"
           "  %s status [config]\n"
+          "  %s doctor [config]\n"
           "  %s verify <profile> [config]\n"
           "  %s repin <profile> [config]\n"
+          "  %s repin-globals [config]\n"
           "  %s argv <profile> [config] [-- args...]\n"
           "  %s exec <profile> [config] [-- args...]\n"
           "  %s hash-file <absolute-path>\n"
           "  %s hash-tree <absolute-path>\n",
-          progname, progname, progname, progname, progname, progname, progname);
+          progname, progname, progname, progname, progname, progname, progname,
+          progname, progname);
 }
 
 static int
@@ -260,6 +263,11 @@ bondage_main(int argc, char **argv)
     return bondage_status(config_path);
   }
 
+  if (strcmp(argv[1], "doctor") == 0) {
+    if (argc >= 3) config_path = argv[2];
+    return bondage_doctor(config_path);
+  }
+
   if (strcmp(argv[1], "verify") == 0) {
     if (argc < 3) {
       bondage_usage(argv[0]);
@@ -276,6 +284,11 @@ bondage_main(int argc, char **argv)
     }
     if (argc >= 4) config_path = argv[3];
     return bondage_repin(argv[2], config_path);
+  }
+
+  if (strcmp(argv[1], "repin-globals") == 0) {
+    if (argc >= 3) config_path = argv[2];
+    return bondage_repin_globals(config_path);
   }
 
   if (strcmp(argv[1], "hash-file") == 0) {

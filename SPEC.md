@@ -40,6 +40,8 @@ Implemented now:
 - direct file hashing
 - package tree hashing
 - config rewrite + `repin` for versioned tool moves
+- non-mutating `doctor` drift detection
+- `repin-globals` for shared helper maintenance
 - exact argv construction
 - optional `envchain`
 - optional `nono`

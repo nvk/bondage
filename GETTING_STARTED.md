@@ -122,6 +122,25 @@ Important:
 
 The sample config is not meant to be copied unchanged.
 
+## Upgrade Loop
+
+The maintenance path should now be:
+
+```sh
+bondage doctor ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf
+bondage repin codex ~/.config/bondage/bondage.conf
+bondage verify codex ~/.config/bondage/bondage.conf
+```
+
+Use the commands narrowly:
+
+- `doctor` checks the whole config and tells you what drifted
+- `repin-globals` only refreshes shared helpers like `nono`, `envchain`, and
+  `touchid-check`
+- `repin <profile>` refreshes the selected tool family and any matching sibling
+  profiles that share the same pinned target, interpreter, or package root
+
 ## Machine-Specific vs Reusable
 
 Reusable ideas:
@@ -163,6 +182,8 @@ After an upgrade, do not hand-edit versioned paths and hashes unless you are
 recovering from something more broken than usual. Use:
 
 ```sh
+bondage doctor ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf
 bondage repin codex ~/.config/bondage/bondage.conf
 bondage repin pi ~/.config/bondage/bondage.conf
 ```
@@ -196,6 +217,8 @@ bondage exec codex ~/.config/bondage/bondage.conf -- --help
 For ongoing maintenance, the upgrade loop should now be:
 
 ```sh
+bondage doctor ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf
 bondage repin codex ~/.config/bondage/bondage.conf
 bondage verify codex ~/.config/bondage/bondage.conf
 ```

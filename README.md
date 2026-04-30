@@ -117,8 +117,10 @@ artifacts, and thin shell wrappers remain your responsibility.
 
 ```sh
 ./bondage status [config]
+./bondage doctor [config]
 ./bondage verify <profile> [config]
 ./bondage repin <profile> [config]
+./bondage repin-globals [config]
 ./bondage argv <profile> [config] [-- args...]
 ./bondage exec <profile> [config] [-- args...]
 ./bondage hash-file <absolute-path>
@@ -150,6 +152,8 @@ trees as explicit change events.
 Minimum checklist:
 
 ```sh
+bondage doctor ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf
 bondage repin codex ~/.config/bondage/bondage.conf
 bondage repin claude ~/.config/bondage/bondage.conf
 bondage verify codex ~/.config/bondage/bondage.conf
@@ -171,6 +175,13 @@ In practice:
 - global helpers like `nono`, `envchain`, and `touchid-check` are repinned too
   when that profile type depends on them
 
+`doctor` is the non-mutating pass. It checks the whole config, exits nonzero on
+stale or broken pins, and tells you which repair command to run next.
+
+`repin-globals` is the narrow maintenance command for shared helpers only. Use
+it when the drift is in `nono`, `envchain`, or `touchid-check`, not in a tool
+family itself.
+
 Then open a fresh shell and confirm the wrapper names still resolve to shell
 functions rather than silently falling through to raw binaries.
 
@@ -180,8 +191,10 @@ Implemented now:
 
 - hand-written INI-ish config parser
 - `status`
+- `doctor`
 - `verify`
 - `repin`
+- `repin-globals`
 - `argv`
 - `exec`
 - `hash-file`
