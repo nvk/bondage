@@ -182,6 +182,10 @@ stale or broken pins, and tells you which repair command to run next.
 it when the drift is in `nono`, `envchain`, or `touchid-check`, not in a tool
 family itself.
 
+`verify` still fails closed, but it now tries to explain common Homebrew drift
+in human terms. If a pinned path moved from one installed version to another,
+the error tells you what changed and which `repin` command to run next.
+
 Then open a fresh shell and confirm the wrapper names still resolve to shell
 functions rather than silently falling through to raw binaries.
 

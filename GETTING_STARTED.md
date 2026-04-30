@@ -140,6 +140,8 @@ Use the commands narrowly:
   `touchid-check`
 - `repin <profile>` refreshes the selected tool family and any matching sibling
   profiles that share the same pinned target, interpreter, or package root
+- `verify` still fails closed, but when it recognizes a moved Homebrew version
+  it now tells you which `repin` command to run
 
 ## Machine-Specific vs Reusable
 

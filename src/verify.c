@@ -1,5 +1,6 @@
 #include <CommonCrypto/CommonDigest.h>
 
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -33,6 +34,56 @@ bondage_is_absolute_path(const char *path)
   return path != NULL && path[0] == '/';
 }
 
+static char *
+bondage_xstrndup(const char *value, size_t len)
+{
+  char *copy = malloc(len + 1);
+  if (copy == NULL) return NULL;
+  memcpy(copy, value, len);
+  copy[len] = '\0';
+  return copy;
+}
+
+static int
+bondage_version_cmp(const char *a, const char *b)
+{
+  while (*a != '\0' || *b != '\0') {
+    if (isdigit((unsigned char)*a) && isdigit((unsigned char)*b)) {
+      unsigned long na = 0;
+      unsigned long nb = 0;
+
+      while (*a == '0') a++;
+      while (*b == '0') b++;
+
+      while (isdigit((unsigned char)*a)) {
+        na = (na * 10UL) + (unsigned long)(*a - '0');
+        a++;
+      }
+      while (isdigit((unsigned char)*b)) {
+        nb = (nb * 10UL) + (unsigned long)(*b - '0');
+        b++;
+      }
+
+      if (na < nb) return -1;
+      if (na > nb) return 1;
+      continue;
+    }
+
+    if (*a == *b) {
+      if (*a == '\0') return 0;
+      a++;
+      b++;
+      continue;
+    }
+
+    if (*a == '\0') return -1;
+    if (*b == '\0') return 1;
+    return (unsigned char)*a < (unsigned char)*b ? -1 : 1;
+  }
+
+  return 0;
+}
+
 static int
 bondage_path_is_within_root(const char *root, const char *path)
 {
@@ -59,6 +110,224 @@ bondage_join_path(const char *left, const char *right)
   joined[left_len] = '/';
   memcpy(joined + left_len + 1, right, right_len + 1);
   return joined;
+}
+
+static int
+bondage_parse_brew_path(const char *path,
+                        char **formula_out,
+                        char **version_out,
+                        const char **suffix_out)
+{
+  const char *marker = strstr(path, "/Caskroom/");
+  size_t marker_len = strlen("/Caskroom/");
+  const char *cursor;
+  const char *formula_end;
+  const char *version_end;
+
+  if (marker == NULL) {
+    marker = strstr(path, "/Cellar/");
+    marker_len = strlen("/Cellar/");
+  }
+  if (marker == NULL) return 0;
+
+  cursor = marker + marker_len;
+  formula_end = strchr(cursor, '/');
+  if (formula_end == NULL) return 0;
+
+  version_end = strchr(formula_end + 1, '/');
+  if (version_end == NULL) version_end = path + strlen(path);
+
+  *formula_out = bondage_xstrndup(cursor, (size_t)(formula_end - cursor));
+  *version_out = bondage_xstrndup(formula_end + 1,
+                                  (size_t)(version_end - (formula_end + 1)));
+  if (*formula_out == NULL || *version_out == NULL) {
+    free(*formula_out);
+    free(*version_out);
+    *formula_out = NULL;
+    *version_out = NULL;
+    return 0;
+  }
+  *suffix_out = version_end;
+  return 1;
+}
+
+static int
+bondage_find_brew_replacement(const char *path, char **replacement_out)
+{
+  const char *marker = strstr(path, "/Caskroom/");
+  size_t marker_len = strlen("/Caskroom/");
+  const char *cursor;
+  const char *formula_end;
+  const char *version_end;
+  char *root = NULL;
+  DIR *dir = NULL;
+  struct dirent *entry;
+  char *best_version = NULL;
+  char *best_path = NULL;
+  int ok = 0;
+
+  if (marker == NULL) {
+    marker = strstr(path, "/Cellar/");
+    marker_len = strlen("/Cellar/");
+  }
+  if (marker == NULL) return 0;
+
+  cursor = marker + marker_len;
+  formula_end = strchr(cursor, '/');
+  if (formula_end == NULL) return 0;
+
+  version_end = strchr(formula_end + 1, '/');
+  if (version_end == NULL) version_end = path + strlen(path);
+
+  root = bondage_xstrndup(path, (size_t)(formula_end - path));
+  if (root == NULL) goto cleanup;
+
+  dir = opendir(root);
+  if (dir == NULL) goto cleanup;
+
+  while ((entry = readdir(dir)) != NULL) {
+    char *candidate = NULL;
+
+    if (entry->d_name[0] == '.') continue;
+    candidate = bondage_join_path(root, entry->d_name);
+    if (candidate == NULL) goto cleanup;
+
+    if (version_end[0] != '\0') {
+      char *grown;
+      size_t candidate_len = strlen(candidate);
+      size_t rest_len = strlen(version_end);
+
+      grown = realloc(candidate, candidate_len + rest_len + 1);
+      if (grown == NULL) {
+        free(candidate);
+        goto cleanup;
+      }
+      candidate = grown;
+      memcpy(candidate + candidate_len, version_end, rest_len + 1);
+    }
+
+    if (access(candidate, F_OK) == 0) {
+      if (best_version == NULL ||
+          bondage_version_cmp(entry->d_name, best_version) > 0) {
+        free(best_version);
+        free(best_path);
+        best_version = strdup(entry->d_name);
+        best_path = candidate;
+        if (best_version == NULL) goto cleanup;
+        continue;
+      }
+    }
+
+    free(candidate);
+  }
+
+  if (best_path != NULL) {
+    *replacement_out = best_path;
+    best_path = NULL;
+    ok = 1;
+  }
+
+cleanup:
+  if (dir != NULL) closedir(dir);
+  free(root);
+  free(best_version);
+  free(best_path);
+  return ok;
+}
+
+static const char *
+bondage_configured_path_for_label(const struct bondage_config *config,
+                                  const struct bondage_profile *profile,
+                                  const char *label,
+                                  int *is_global_out)
+{
+  *is_global_out = 0;
+
+  if (strcmp(label, "envchain") == 0) {
+    *is_global_out = 1;
+    return config->global.envchain;
+  }
+  if (strcmp(label, "nono") == 0) {
+    *is_global_out = 1;
+    return config->global.nono;
+  }
+  if (strcmp(label, "touchid") == 0) {
+    *is_global_out = 1;
+    return config->global.touchid;
+  }
+  if (strcmp(label, "target") == 0) return profile->target;
+  if (strcmp(label, "interpreter") == 0) return profile->interpreter;
+  if (strcmp(label, "package_root") == 0) return profile->package_root;
+  return NULL;
+}
+
+static int
+bondage_extract_error_label(const char *base_error, char *label, size_t labelsz)
+{
+  const char *space = strchr(base_error, ' ');
+  size_t len;
+
+  if (space == NULL || space == base_error) return 0;
+  len = (size_t)(space - base_error);
+  if (len + 1 > labelsz) return 0;
+  memcpy(label, base_error, len);
+  label[len] = '\0';
+  return 1;
+}
+
+static char *
+bondage_extract_resolved_path_from_error(const char *base_error)
+{
+  const char *marker = strstr(base_error, "resolved=");
+  const char *end;
+
+  if (marker == NULL) return NULL;
+  marker += strlen("resolved=");
+  end = marker;
+  while (*end != '\0' && !isspace((unsigned char)*end)) end++;
+  return bondage_xstrndup(marker, (size_t)(end - marker));
+}
+
+static void
+bondage_describe_brew_version_change(const char *configured_path,
+                                     const char *current_path,
+                                     char *buf,
+                                     size_t bufsz)
+{
+  char *configured_formula = NULL;
+  char *configured_version = NULL;
+  char *current_formula = NULL;
+  char *current_version = NULL;
+  const char *configured_suffix = NULL;
+  const char *current_suffix = NULL;
+  int cmp;
+
+  if (!bondage_parse_brew_path(configured_path, &configured_formula,
+                               &configured_version, &configured_suffix) ||
+      !bondage_parse_brew_path(current_path, &current_formula,
+                               &current_version, &current_suffix)) {
+    goto cleanup;
+  }
+
+  if (strcmp(configured_formula, current_formula) != 0) goto cleanup;
+  if (strcmp(configured_version, current_version) == 0) goto cleanup;
+  if (strcmp(configured_suffix, current_suffix) != 0) goto cleanup;
+
+  cmp = bondage_version_cmp(configured_version, current_version);
+  if (cmp < 0) {
+    snprintf(buf, bufsz, "detected Homebrew upgrade for %s: %s -> %s",
+             configured_formula, configured_version, current_version);
+  }
+  else if (cmp > 0) {
+    snprintf(buf, bufsz, "detected Homebrew downgrade for %s: %s -> %s",
+             configured_formula, configured_version, current_version);
+  }
+
+cleanup:
+  free(configured_formula);
+  free(configured_version);
+  free(current_formula);
+  free(current_version);
 }
 
 static int
@@ -478,10 +747,11 @@ bondage_verify_file(const char *label,
                     size_t errbufsz)
 {
   char actual_fp[BONDAGE_SHA256_STRLEN];
+  char detail[256];
 
   if (!bondage_hash_file_path(path, require_exec, actual_fp, sizeof(actual_fp),
-                              errbuf, errbufsz)) {
-    bondage_set_error(errbuf, errbufsz, "%s %s", label, errbuf);
+                              detail, sizeof(detail))) {
+    bondage_set_error(errbuf, errbufsz, "%s %s", label, detail);
     return 0;
   }
 
@@ -507,9 +777,11 @@ bondage_verify_tree(const char *label,
                     size_t errbufsz)
 {
   char actual_fp[BONDAGE_SHA256_STRLEN];
+  char detail[256];
 
-  if (!bondage_hash_tree_path(path, actual_fp, sizeof(actual_fp), errbuf, errbufsz)) {
-    bondage_set_error(errbuf, errbufsz, "%s %s", label, errbuf);
+  if (!bondage_hash_tree_path(path, actual_fp, sizeof(actual_fp),
+                              detail, sizeof(detail))) {
+    bondage_set_error(errbuf, errbufsz, "%s %s", label, detail);
     return 0;
   }
 
@@ -588,4 +860,83 @@ bondage_verify_profile(const struct bondage_config *config,
   }
 
   return 1;
+}
+
+void
+bondage_format_verify_failure(const struct bondage_config *config,
+                              const struct bondage_profile *profile,
+                              const char *config_path,
+                              const char *base_error,
+                              char *out,
+                              size_t outsz)
+{
+  char label[64];
+  char version_note[256];
+  char hint[512];
+  char *resolved = NULL;
+  char *replacement = NULL;
+  const char *configured_path;
+  const char *current_path = NULL;
+  int is_global = 0;
+
+  if (out == NULL || outsz == 0) return;
+
+  snprintf(out, outsz, "%s", base_error);
+  if (!bondage_extract_error_label(base_error, label, sizeof(label))) return;
+
+  configured_path = bondage_configured_path_for_label(config, profile, label, &is_global);
+  if (configured_path == NULL) return;
+
+  resolved = bondage_extract_resolved_path_from_error(base_error);
+  if (resolved != NULL) {
+    current_path = resolved;
+  }
+  else if (bondage_find_brew_replacement(configured_path, &replacement)) {
+    current_path = replacement;
+  }
+  else if (access(configured_path, F_OK) == 0) {
+    current_path = configured_path;
+  }
+
+  version_note[0] = '\0';
+  hint[0] = '\0';
+
+  if (current_path != NULL && configured_path != NULL) {
+    bondage_describe_brew_version_change(configured_path, current_path,
+                                         version_note, sizeof(version_note));
+  }
+
+  if (is_global) {
+    snprintf(hint, sizeof(hint),
+             "Run: bondage repin-globals %s",
+             config_path);
+  }
+  else {
+    snprintf(hint, sizeof(hint),
+             "Run: bondage repin %s %s",
+             profile->name, config_path);
+  }
+
+  if (version_note[0] != '\0') {
+    snprintf(out, outsz, "%s. %s. %s",
+             base_error, version_note, hint);
+  }
+  else if (current_path != NULL && current_path != configured_path &&
+           strstr(base_error, "path mismatch: configured=") != NULL) {
+    snprintf(out, outsz, "%s. Current installed path: %s. %s",
+             base_error, current_path, hint);
+  }
+  else if (strstr(base_error, "fingerprint mismatch:") != NULL) {
+    snprintf(out, outsz,
+             "%s. If you intentionally upgraded, downgraded, or reinstalled this artifact, %s",
+             base_error, hint);
+  }
+  else if (strstr(base_error, "realpath failed for") != NULL) {
+    snprintf(out, outsz,
+             "%s. The pinned path may have moved. %s",
+             base_error, hint);
+  }
+
+  free(resolved);
+  free(replacement);
 }

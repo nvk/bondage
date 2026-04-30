@@ -27,4 +27,12 @@ bondage_verify_profile(const struct bondage_config *config,
                        char *errbuf,
                        size_t errbufsz);
 
+void
+bondage_format_verify_failure(const struct bondage_config *config,
+                              const struct bondage_profile *profile,
+                              const char *config_path,
+                              const char *base_error,
+                              char *out,
+                              size_t outsz);
+
 #endif

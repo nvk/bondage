@@ -128,6 +128,7 @@ bondage_verify(const char *profile_name, const char *config_path)
   struct bondage_config config;
   const struct bondage_profile *profile;
   char errbuf[256];
+  char final_errbuf[1024];
 
   if (!bondage_load_profile(profile_name, config_path, &config, &profile)) {
     return 1;
@@ -135,7 +136,9 @@ bondage_verify(const char *profile_name, const char *config_path)
   bondage_print_profile_header(profile);
 
   if (!bondage_verify_profile(&config, profile, stdout, errbuf, sizeof(errbuf))) {
-    fprintf(stderr, "bondage: %s\n", errbuf);
+    bondage_format_verify_failure(&config, profile, config_path,
+                                  errbuf, final_errbuf, sizeof(final_errbuf));
+    fprintf(stderr, "bondage: %s\n", final_errbuf);
     bondage_config_free(&config);
     return 1;
   }
@@ -155,6 +158,7 @@ bondage_argv_or_exec(const char *profile_name, const char *config_path,
   const struct bondage_profile *profile;
   struct bondage_argv args;
   char errbuf[256];
+  char final_errbuf[1024];
 
   if (!bondage_load_profile(profile_name, config_path, &config, &profile)) {
     return 1;
@@ -165,7 +169,9 @@ bondage_argv_or_exec(const char *profile_name, const char *config_path,
 
   if (!bondage_verify_profile(&config, profile, do_exec ? NULL : stdout,
                               errbuf, sizeof(errbuf))) {
-    fprintf(stderr, "bondage: %s\n", errbuf);
+    bondage_format_verify_failure(&config, profile, config_path,
+                                  errbuf, final_errbuf, sizeof(final_errbuf));
+    fprintf(stderr, "bondage: %s\n", final_errbuf);
     bondage_config_free(&config);
     return 1;
   }
