@@ -127,7 +127,12 @@ artifacts, and thin shell wrappers remain your responsibility.
 ./bondage hash-tree <absolute-path>
 ```
 
-If `config` is omitted, `./bondage.conf` is used.
+If `config` is omitted, `bondage` resolves it in this order:
+
+1. explicit CLI config argument
+2. `BONDAGE_CONF`
+3. `~/.config/bondage/bondage.conf`
+4. `./bondage.conf`
 
 An example config lives at [`bondage.conf.example`](bondage.conf.example).
 It is intentionally a small schema/sample file, not the full local profile matrix.
@@ -141,6 +146,8 @@ Important:
 
 - paths in the sample config are literal absolute paths
 - `bondage` does not expand shell variables inside the config
+- `bondage` itself now prefers the standard config location
+  `~/.config/bondage/bondage.conf` when no explicit config is provided
 - the sample config is a pattern to adapt, not a file to use unchanged
 - the `examples/nono/` profiles are starter patterns, not a complete local tier matrix
 

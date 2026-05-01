@@ -1,4 +1,6 @@
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "config.h"
@@ -10,6 +12,19 @@
 static const char *
 bondage_default_config_path(void)
 {
+  static char home_path[PATH_MAX];
+  const char *override = getenv("BONDAGE_CONF");
+  const char *home = getenv("HOME");
+  int n;
+
+  if (override != NULL && override[0] != '\0') return override;
+
+  if (home != NULL && home[0] != '\0') {
+    n = snprintf(home_path, sizeof(home_path),
+                 "%s/.config/bondage/bondage.conf", home);
+    if (n > 0 && (size_t)n < sizeof(home_path)) return home_path;
+  }
+
   return "./bondage.conf";
 }
 
