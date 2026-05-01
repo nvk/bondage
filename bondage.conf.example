@@ -10,6 +10,7 @@ tool_root = /Users/you/.bondage/tools
 
 [defaults "agent-nono"]
 nono_allow_cwd = true
+# nono_allow_dir = /Users/you/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox
 nono_allow_file = /dev/tty
 nono_allow_file = /dev/null
 nono_read_file = /dev/urandom

@@ -161,6 +161,7 @@ policy back into shell wrappers:
 ```ini
 [defaults "agent-nono"]
 nono_allow_cwd = true
+nono_allow_dir = /Users/you/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox
 nono_allow_file = /dev/tty
 nono_read_file = /dev/urandom
 
@@ -184,8 +185,10 @@ Rules:
 
 - inheritance is explicit and profile-local
 - defaults are applied in order, then profile-local keys override them
-- list keys append in order, so inherited `nono_allow_file` entries come before
-  profile-local entries
+- `nono_allow_cwd = true` passes both `--workdir <current directory>` and
+  `--allow-cwd` to `nono` so `$WORKDIR` profile expansion is deterministic
+- list keys append in order, so inherited `nono_allow_dir`, `nono_read_dir`,
+  `nono_allow_file`, and `nono_read_file` entries come before profile-local entries
 - repeatable `target_arg` entries are appended after the verified target and
   before user passthrough args; this is where tool policy flags belong
 - old configs without defaults still work
@@ -278,7 +281,8 @@ Implemented now:
 - named defaults and explicit profile inheritance for repeated launch policy
 - optional `envchain` per profile
 - optional `nono` per profile, including rawdog/no-`nono` launches
-- profile-driven `nono` flags like `--allow-cwd`, `--allow-file`, and `--read-file`
+- profile-driven `nono` flags like `--workdir`, `--allow-cwd`, `--allow`,
+  `--read`, `--allow-file`, and `--read-file`
 - profile-driven target args for stable tool policy flags
 - global `nono_profile_root` injection so short profile names expand to explicit JSON paths
 - profile-driven static env injection and command-derived env vars

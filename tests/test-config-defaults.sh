@@ -39,6 +39,8 @@ nono_fp = $nono_fp
 
 [defaults "agent-nono"]
 nono_allow_cwd = true
+nono_allow_dir = $root
+nono_read_dir = /tmp
 nono_allow_file = /dev/tty
 nono_read_file = /dev/urandom
 
@@ -64,18 +66,24 @@ EOF
 ./bondage verify codex "$conf" >/dev/null
 argv="$(./bondage argv codex "$conf" -- ping)"
 
-grep -F 'argv[4] = --allow-cwd' <<<"$argv" >/dev/null
-grep -F 'argv[5] = --allow-file' <<<"$argv" >/dev/null
-grep -F 'argv[6] = /dev/tty' <<<"$argv" >/dev/null
-grep -F 'argv[7] = --allow-file' <<<"$argv" >/dev/null
-grep -F 'argv[8] = /dev/null' <<<"$argv" >/dev/null
-grep -F 'argv[9] = --read-file' <<<"$argv" >/dev/null
-grep -F 'argv[10] = /dev/urandom' <<<"$argv" >/dev/null
-grep -F "argv[12] = $root/fixtures/fake-codex" <<<"$argv" >/dev/null
-grep -F 'argv[13] = --sandbox' <<<"$argv" >/dev/null
-grep -F 'argv[14] = danger-full-access' <<<"$argv" >/dev/null
-grep -F 'argv[15] = --test-profile-local' <<<"$argv" >/dev/null
-grep -F 'argv[16] = ping' <<<"$argv" >/dev/null
+grep -F 'argv[4] = --workdir' <<<"$argv" >/dev/null
+grep -F "argv[5] = $root" <<<"$argv" >/dev/null
+grep -F 'argv[6] = --allow-cwd' <<<"$argv" >/dev/null
+grep -F 'argv[7] = --allow' <<<"$argv" >/dev/null
+grep -F "argv[8] = $root" <<<"$argv" >/dev/null
+grep -F 'argv[9] = --read' <<<"$argv" >/dev/null
+grep -F 'argv[10] = /tmp' <<<"$argv" >/dev/null
+grep -F 'argv[11] = --allow-file' <<<"$argv" >/dev/null
+grep -F 'argv[12] = /dev/tty' <<<"$argv" >/dev/null
+grep -F 'argv[13] = --allow-file' <<<"$argv" >/dev/null
+grep -F 'argv[14] = /dev/null' <<<"$argv" >/dev/null
+grep -F 'argv[15] = --read-file' <<<"$argv" >/dev/null
+grep -F 'argv[16] = /dev/urandom' <<<"$argv" >/dev/null
+grep -F "argv[18] = $root/fixtures/fake-codex" <<<"$argv" >/dev/null
+grep -F 'argv[19] = --sandbox' <<<"$argv" >/dev/null
+grep -F 'argv[20] = danger-full-access' <<<"$argv" >/dev/null
+grep -F 'argv[21] = --test-profile-local' <<<"$argv" >/dev/null
+grep -F 'argv[22] = ping' <<<"$argv" >/dev/null
 
 unknown="$tmpdir/unknown.conf"
 cat >"$unknown" <<EOF
@@ -168,6 +176,29 @@ if ./bondage status "$invalid_layer" >"$tmpdir/invalid-layer.out" 2>&1; then
   exit 1
 fi
 grep -F "has nono settings but use_nono=false" "$tmpdir/invalid-layer.out" >/dev/null
+
+invalid_dir="$tmpdir/invalid-dir.conf"
+cat >"$invalid_dir" <<EOF
+[global]
+nono = $root/fixtures/fake-nono
+nono_fp = $nono_fp
+
+[profile "codex"]
+use_envchain = false
+use_nono = true
+nono_profile = custom-codex
+touch_policy = none
+target_kind = native
+target = $root/fixtures/fake-codex
+target_fp = $codex_fp
+nono_allow_dir = relative/path
+EOF
+
+if ./bondage status "$invalid_dir" >"$tmpdir/invalid-dir.out" 2>&1; then
+  echo "expected relative nono_allow_dir to fail" >&2
+  exit 1
+fi
+grep -F "nono_allow_dir must be an absolute path" "$tmpdir/invalid-dir.out" >/dev/null
 
 repin_conf="$tmpdir/repin-defaults.conf"
 cat >"$repin_conf" <<EOF

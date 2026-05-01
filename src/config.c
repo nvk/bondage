@@ -223,6 +223,8 @@ bondage_free_profile(struct bondage_profile *profile)
   free(profile->interpreter_fp);
   free(profile->package_root);
   free(profile->package_tree_fp);
+  bondage_free_string_list(&profile->nono_allow_dirs);
+  bondage_free_string_list(&profile->nono_read_dirs);
   bondage_free_string_list(&profile->nono_allow_files);
   bondage_free_string_list(&profile->nono_read_files);
   bondage_free_string_list(&profile->target_args);
@@ -488,6 +490,14 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
     return bondage_string_list_append(&profile->nono_read_files, value,
                                       errbuf, errbufsz);
   }
+  if (strcmp(key, "nono_allow_dir") == 0) {
+    return bondage_string_list_append(&profile->nono_allow_dirs, value,
+                                      errbuf, errbufsz);
+  }
+  if (strcmp(key, "nono_read_dir") == 0) {
+    return bondage_string_list_append(&profile->nono_read_dirs, value,
+                                      errbuf, errbufsz);
+  }
   if (strcmp(key, "target_arg") == 0) {
     return bondage_string_list_append(&profile->target_args, value,
                                       errbuf, errbufsz);
@@ -599,6 +609,10 @@ bondage_apply_profile_values(struct bondage_profile *dst,
                                   src->package_tree_fp, owner_kind, owner_name,
                                   errbuf, errbufsz)) return 0;
 
+  if (!bondage_copy_string_list(&dst->nono_allow_dirs, &src->nono_allow_dirs,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->nono_read_dirs, &src->nono_read_dirs,
+                                errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->nono_allow_files, &src->nono_allow_files,
                                 errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->nono_read_files, &src->nono_read_files,
@@ -755,6 +769,7 @@ bondage_validate_profile(const struct bondage_profile *profile, char *errbuf,
 
   if (!profile->use_nono &&
       (profile->nono_profile != NULL || profile->nono_allow_cwd ||
+       profile->nono_allow_dirs.count != 0 || profile->nono_read_dirs.count != 0 ||
        profile->nono_allow_files.count != 0 || profile->nono_read_files.count != 0)) {
     bondage_set_error(errbuf, errbufsz,
                       "profile '%s' has nono settings but use_nono=false",
@@ -801,6 +816,16 @@ bondage_validate_profile(const struct bondage_profile *profile, char *errbuf,
   }
   if (!bondage_validate_string_list_paths(&profile->nono_read_files,
                                           "nono_read_file", profile->name,
+                                          errbuf, errbufsz)) {
+    return 0;
+  }
+  if (!bondage_validate_string_list_paths(&profile->nono_allow_dirs,
+                                          "nono_allow_dir", profile->name,
+                                          errbuf, errbufsz)) {
+    return 0;
+  }
+  if (!bondage_validate_string_list_paths(&profile->nono_read_dirs,
+                                          "nono_read_dir", profile->name,
                                           errbuf, errbufsz)) {
     return 0;
   }
