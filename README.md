@@ -169,8 +169,11 @@ target_kind = native
 target = /Users/you/.bondage/tools/codex/0.128.0/codex-aarch64-apple-darwin
 target_fp = sha256:replace-me
 
+[defaults "codex-external-sandbox"]
+target_arg = --dangerously-bypass-approvals-and-sandbox
+
 [profile "codex"]
-inherits = agent-nono,codex-target
+inherits = agent-nono,codex-target,codex-external-sandbox
 use_envchain = false
 use_nono = true
 nono_profile = codex
@@ -183,9 +186,27 @@ Rules:
 - defaults are applied in order, then profile-local keys override them
 - list keys append in order, so inherited `nono_allow_file` entries come before
   profile-local entries
+- repeatable `target_arg` entries are appended after the verified target and
+  before user passthrough args; this is where tool policy flags belong
 - old configs without defaults still work
 - invalid combinations fail closed, for example inheriting `nono_*` settings
   while setting `use_nono = false`
+
+For agent permission modes, prefer target args in config over shell-wrapper
+flags:
+
+```ini
+[defaults "claude-auto"]
+target_arg = --permission-mode
+target_arg = auto
+
+[defaults "codex-external-sandbox"]
+target_arg = --dangerously-bypass-approvals-and-sandbox
+```
+
+Only inherit those defaults into profiles that are still protected by the
+outer sandbox layer. Do not inherit dangerous target-permission flags into a
+rawdog/no-`nono` profile unless that is the explicit purpose of the profile.
 
 `status`, `verify`, `doctor`, and `repin` report where inherited pin fields
 come from. If `repin codex` refreshes `defaults "codex-target"`, every profile
@@ -258,6 +279,7 @@ Implemented now:
 - optional `envchain` per profile
 - optional `nono` per profile, including rawdog/no-`nono` launches
 - profile-driven `nono` flags like `--allow-cwd`, `--allow-file`, and `--read-file`
+- profile-driven target args for stable tool policy flags
 - global `nono_profile_root` injection so short profile names expand to explicit JSON paths
 - profile-driven static env injection and command-derived env vars
 - Touch ID launch policy via pinned `touchid-check`

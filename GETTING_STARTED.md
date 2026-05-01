@@ -218,6 +218,24 @@ bondage argv codex ~/.config/bondage/bondage.conf -- --help
 bondage argv pi ~/.config/bondage/bondage.conf -- --help
 ```
 
+If a tool needs stable startup flags, put them in `bondage.conf` with
+repeatable `target_arg` entries instead of hiding them in shell wrappers:
+
+```ini
+[defaults "claude-auto"]
+target_arg = --permission-mode
+target_arg = auto
+
+[defaults "codex-external-sandbox"]
+target_arg = --dangerously-bypass-approvals-and-sandbox
+
+[profile "codex"]
+inherits = agent-nono,codex-target,codex-external-sandbox
+```
+
+`target_arg` values are appended after the verified target binary and before
+whatever the user typed after `--`, so user passthrough args remain last.
+
 Only after that should you use:
 
 ```sh

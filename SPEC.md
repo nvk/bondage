@@ -34,6 +34,8 @@ Key rules:
   - `envchain <namespace> <target...>`
   - `<nono> wrap --profile <name> -- <target...>`
   - direct `<target...>`
+- repeatable `target_arg` values must be inserted after the verified target
+  entrypoint and before user passthrough args
 - config defaults must be explicit:
   - `[defaults "name"]` defines reusable profile keys
   - `inherits = name` opt-in applies defaults to a profile
@@ -56,6 +58,7 @@ Implemented now:
 - optional `nono`
 - global nono profile-root expansion for explicit JSON profile paths
 - `nono` flag injection
+- target argument injection for stable tool startup policy
 - static env injection and command-derived env vars
 - Touch ID / local auth launch policy
 - prelaunch directory creation

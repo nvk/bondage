@@ -51,6 +51,7 @@ struct bondage_profile {
   int nono_allow_cwd_set;
   struct bondage_string_list nono_allow_files;
   struct bondage_string_list nono_read_files;
+  struct bondage_string_list target_args;
   struct bondage_string_list env_set;
   struct bondage_string_list env_command;
   struct bondage_string_list ensure_dir;

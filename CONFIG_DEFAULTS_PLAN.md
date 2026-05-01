@@ -47,6 +47,8 @@ deterministic launch argv.
   when a profile disables the layer that would consume them.
 - Do not make shell wrappers smarter to compensate for config duplication. The
   launcher remains the policy boundary.
+- Do not hide stable target startup flags in shell wrappers when they can live
+  in audited launcher config.
 
 ## Proposed Syntax
 
@@ -85,6 +87,8 @@ touch_policy = none
 - Scalar keys use last-writer-wins.
 - List keys append in order: inherited defaults first, profile-local entries
   last.
+- `target_arg` is a list key. Values are inserted after the verified target
+  entrypoint and before user passthrough args.
 - Later `env_set` values already override earlier values during env assembly,
   so list append order keeps existing behavior.
 - Missing default names are hard errors.

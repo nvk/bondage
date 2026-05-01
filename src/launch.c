@@ -626,6 +626,7 @@ bondage_build_argv(const struct bondage_config *config,
   }
   fixed_argc += 1;
   if (target0 != NULL) fixed_argc += 1;
+  fixed_argc += profile->target_args.count;
 
   argc = fixed_argc + (size_t)passthrough_argc;
   argv = calloc(argc + 1, sizeof(char *));
@@ -667,6 +668,9 @@ bondage_build_argv(const struct bondage_config *config,
   argv[cursor++] = bondage_xstrdup(runner);
   if (target0 != NULL) {
     argv[cursor++] = bondage_xstrdup(target0);
+  }
+  for (i = 0; i < profile->target_args.count; i++) {
+    argv[cursor++] = bondage_xstrdup(profile->target_args.items[i]);
   }
 
   for (i = 0; i < (size_t)passthrough_argc; i++) {

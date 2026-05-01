@@ -18,6 +18,13 @@ nono_read_file = /dev/urandom
 env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
 env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
 
+[defaults "claude-auto"]
+target_arg = --permission-mode
+target_arg = auto
+
+[defaults "codex-external-sandbox"]
+target_arg = --dangerously-bypass-approvals-and-sandbox
+
 [defaults "claude-target"]
 target_kind = native
 target = /Users/you/.bondage/tools/claude/2.1.112/claude
@@ -48,6 +55,7 @@ package_tree_fp = sha256:replace-me
 
 [profile "claude"]
 inherits = agent-nono
+inherits = claude-auto
 inherits = claude-target
 use_envchain = false
 use_nono = true
@@ -57,6 +65,7 @@ touch_policy = none
 [profile "codex"]
 inherits = agent-nono
 inherits = github-env
+inherits = codex-external-sandbox
 inherits = codex-target
 use_envchain = false
 use_nono = true

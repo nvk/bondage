@@ -225,6 +225,7 @@ bondage_free_profile(struct bondage_profile *profile)
   free(profile->package_tree_fp);
   bondage_free_string_list(&profile->nono_allow_files);
   bondage_free_string_list(&profile->nono_read_files);
+  bondage_free_string_list(&profile->target_args);
   bondage_free_string_list(&profile->env_set);
   bondage_free_string_list(&profile->env_command);
   bondage_free_string_list(&profile->ensure_dir);
@@ -487,6 +488,10 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
     return bondage_string_list_append(&profile->nono_read_files, value,
                                       errbuf, errbufsz);
   }
+  if (strcmp(key, "target_arg") == 0) {
+    return bondage_string_list_append(&profile->target_args, value,
+                                      errbuf, errbufsz);
+  }
   if (strcmp(key, "env_set") == 0) {
     return bondage_string_list_append(&profile->env_set, value, errbuf, errbufsz);
   }
@@ -597,6 +602,8 @@ bondage_apply_profile_values(struct bondage_profile *dst,
   if (!bondage_copy_string_list(&dst->nono_allow_files, &src->nono_allow_files,
                                 errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->nono_read_files, &src->nono_read_files,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->target_args, &src->target_args,
                                 errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->env_set, &src->env_set,
                                 errbuf, errbufsz)) return 0;

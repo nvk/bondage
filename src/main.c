@@ -98,6 +98,18 @@ bondage_print_owner(const char *prefix,
 }
 
 static void
+bondage_print_string_list(const char *prefix,
+                          const char *label,
+                          const struct bondage_string_list *list)
+{
+  size_t i;
+
+  for (i = 0; i < list->count; i++) {
+    printf("%s%s: %s\n", prefix, label, list->items[i]);
+  }
+}
+
+static void
 bondage_print_profile_header(const struct bondage_profile *profile)
 {
   printf("profile: %s\n", profile->name);
@@ -122,6 +134,7 @@ bondage_print_profile_header(const struct bondage_profile *profile)
     printf("package_root: %s\n", profile->package_root);
     bondage_print_owner("", "package_root", &profile->package_root_owner);
   }
+  bondage_print_string_list("", "target_arg", &profile->target_args);
 }
 
 static int
@@ -167,6 +180,7 @@ bondage_status(const char *config_path)
       printf("  package_root: %s\n", profile->package_root);
       bondage_print_owner("  ", "package_root", &profile->package_root_owner);
     }
+    bondage_print_string_list("  ", "target_arg", &profile->target_args);
   }
 
   bondage_config_free(&config);

@@ -47,13 +47,18 @@ target_kind = native
 target = $root/fixtures/fake-codex
 target_fp = $codex_fp
 
+[defaults "codex-auto"]
+target_arg = --sandbox
+target_arg = danger-full-access
+
 [profile "codex"]
-inherits = agent-nono,codex-target
+inherits = agent-nono,codex-target,codex-auto
 use_envchain = false
 use_nono = true
 nono_profile = custom-codex
 touch_policy = none
 nono_allow_file = /dev/null
+target_arg = --test-profile-local
 EOF
 
 ./bondage verify codex "$conf" >/dev/null
@@ -67,7 +72,10 @@ grep -F 'argv[8] = /dev/null' <<<"$argv" >/dev/null
 grep -F 'argv[9] = --read-file' <<<"$argv" >/dev/null
 grep -F 'argv[10] = /dev/urandom' <<<"$argv" >/dev/null
 grep -F "argv[12] = $root/fixtures/fake-codex" <<<"$argv" >/dev/null
-grep -F 'argv[13] = ping' <<<"$argv" >/dev/null
+grep -F 'argv[13] = --sandbox' <<<"$argv" >/dev/null
+grep -F 'argv[14] = danger-full-access' <<<"$argv" >/dev/null
+grep -F 'argv[15] = --test-profile-local' <<<"$argv" >/dev/null
+grep -F 'argv[16] = ping' <<<"$argv" >/dev/null
 
 unknown="$tmpdir/unknown.conf"
 cat >"$unknown" <<EOF
