@@ -18,6 +18,7 @@ src/%.o: src/%.c include/config.h include/launch.h include/main.h include/repin.
 
 test: all
 	./tests/test-config-defaults.sh
+	./tests/test-cli-options.sh
 
 clean:
 	rm -f $(BIN) src/*.o

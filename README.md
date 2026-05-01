@@ -123,25 +123,44 @@ artifacts, and thin shell wrappers remain your responsibility.
 ## Current commands
 
 ```sh
-./bondage status [config]
-./bondage doctor [config]
-./bondage verify <profile> [config]
-./bondage repin <profile> [config]
-./bondage repin-globals [config]
-./bondage chain <profile> [config] [-- args...]
-./bondage exec <profile> [config] [-- args...]
-./bondage argv <profile> [config] [-- args...]  # compatibility alias for chain
+./bondage [--config <path>] status [config]
+./bondage [--config <path>] doctor [config]
+./bondage [--config <path>] verify <profile> [config]
+./bondage [--config <path>] repin <profile> [config]
+./bondage [--config <path>] repin-globals [config]
+./bondage [--config <path>] chain <profile> [config] [-- args...]
+./bondage [--config <path>] exec <profile> [config] [-- args...]
+./bondage [--config <path>] argv <profile> [config] [-- args...]  # compatibility alias for chain
 ./bondage hash-file <absolute-path>
 ./bondage hash-tree <absolute-path>
 ```
 
 If `config` is omitted, `bondage` resolves it in this order:
 
-1. explicit CLI config argument
-2. `BONDAGE_CONF`
-3. `~/.config/bondage/bondage.conf`, when it exists
-4. `./.bondage.conf`, when it exists
-5. `./bondage.conf`
+1. `--config <path>` / `-c <path>`
+2. legacy positional config argument
+3. `BONDAGE_CONF`
+4. `~/.config/bondage/bondage.conf`, when it exists
+5. `./.bondage.conf`, when it exists
+6. `./bondage.conf`
+
+Do not pass both `--config` and a positional config path in the same command.
+For `chain`, `argv`, and `exec`, everything after `--` is preserved as
+passthrough tool arguments and is never parsed as bondage options.
+
+Legacy positional config forms remain supported:
+
+```sh
+bondage verify codex ~/.config/bondage/bondage.conf
+bondage chain codex ~/.config/bondage/bondage.conf -- --help
+```
+
+The less ambiguous form is preferred for new docs and wrappers:
+
+```sh
+bondage --config ~/.config/bondage/bondage.conf verify codex
+bondage --config ~/.config/bondage/bondage.conf chain codex -- --help
+```
 
 An example config lives at [`bondage.conf.example`](bondage.conf.example).
 It is intentionally a small schema/sample file, not the full local profile matrix.
