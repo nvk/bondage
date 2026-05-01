@@ -116,23 +116,42 @@ artifacts, and thin shell wrappers remain your responsibility.
 ## Current commands
 
 ```sh
-./bondage status [config]
-./bondage doctor [config]
-./bondage verify <profile> [config]
-./bondage repin <profile> [config]
-./bondage repin-globals [config]
-./bondage argv <profile> [config] [-- args...]
-./bondage exec <profile> [config] [-- args...]
+./bondage [--config <path>] status [config]
+./bondage [--config <path>] doctor [config]
+./bondage [--config <path>] verify <profile> [config]
+./bondage [--config <path>] repin <profile> [config]
+./bondage [--config <path>] repin-globals [config]
+./bondage [--config <path>] argv <profile> [config] [-- args...]
+./bondage [--config <path>] exec <profile> [config] [-- args...]
 ./bondage hash-file <absolute-path>
 ./bondage hash-tree <absolute-path>
 ```
 
 If `config` is omitted, `bondage` resolves it in this order:
 
-1. explicit CLI config argument
-2. `BONDAGE_CONF`
-3. `~/.config/bondage/bondage.conf`
-4. `./bondage.conf`
+1. `--config <path>` / `-c <path>`
+2. legacy positional config argument
+3. `BONDAGE_CONF`
+4. `~/.config/bondage/bondage.conf`
+5. `./bondage.conf`
+
+Do not pass both `--config` and a positional config path in the same command.
+For `argv` and `exec`, everything after `--` is preserved as passthrough tool
+arguments and is never parsed as bondage options.
+
+Legacy positional config forms remain supported:
+
+```sh
+bondage verify codex ~/.config/bondage/bondage.conf
+bondage argv codex ~/.config/bondage/bondage.conf -- --help
+```
+
+The less ambiguous form is preferred for new docs and wrappers:
+
+```sh
+bondage --config ~/.config/bondage/bondage.conf verify codex
+bondage --config ~/.config/bondage/bondage.conf argv codex -- --help
+```
 
 An example config lives at [`bondage.conf.example`](bondage.conf.example).
 It is intentionally a small schema/sample file, not the full local profile matrix.
