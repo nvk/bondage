@@ -1,4 +1,5 @@
 #include <limits.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,22 +29,218 @@ bondage_default_config_path(void)
   return "./bondage.conf";
 }
 
+enum bondage_command_kind {
+  BONDAGE_CMD_STATUS,
+  BONDAGE_CMD_DOCTOR,
+  BONDAGE_CMD_VERIFY,
+  BONDAGE_CMD_REPIN,
+  BONDAGE_CMD_REPIN_GLOBALS,
+  BONDAGE_CMD_ARGV,
+  BONDAGE_CMD_EXEC,
+  BONDAGE_CMD_HASH_FILE,
+  BONDAGE_CMD_HASH_TREE
+};
+
+struct bondage_command {
+  const char *name;
+  enum bondage_command_kind kind;
+};
+
+struct bondage_cli_options {
+  const char *config_path;
+  int help;
+  int command_index;
+};
+
+static const struct bondage_command bondage_commands[] = {
+  {"status", BONDAGE_CMD_STATUS},
+  {"doctor", BONDAGE_CMD_DOCTOR},
+  {"verify", BONDAGE_CMD_VERIFY},
+  {"repin", BONDAGE_CMD_REPIN},
+  {"repin-globals", BONDAGE_CMD_REPIN_GLOBALS},
+  {"argv", BONDAGE_CMD_ARGV},
+  {"exec", BONDAGE_CMD_EXEC},
+  {"hash-file", BONDAGE_CMD_HASH_FILE},
+  {"hash-tree", BONDAGE_CMD_HASH_TREE},
+  {NULL, BONDAGE_CMD_STATUS}
+};
+
 static void
-bondage_usage(const char *progname)
+bondage_usage(FILE *stream, const char *progname)
 {
-  fprintf(stderr,
+  fprintf(stream,
           "Usage:\n"
-          "  %s status [config]\n"
-          "  %s doctor [config]\n"
-          "  %s verify <profile> [config]\n"
-          "  %s repin <profile> [config]\n"
-          "  %s repin-globals [config]\n"
-          "  %s argv <profile> [config] [-- args...]\n"
-          "  %s exec <profile> [config] [-- args...]\n"
+          "  %s [--config <path>] status [config]\n"
+          "  %s [--config <path>] doctor [config]\n"
+          "  %s [--config <path>] verify <profile> [config]\n"
+          "  %s [--config <path>] repin <profile> [config]\n"
+          "  %s [--config <path>] repin-globals [config]\n"
+          "  %s [--config <path>] argv <profile> [config] [-- args...]\n"
+          "  %s [--config <path>] exec <profile> [config] [-- args...]\n"
           "  %s hash-file <absolute-path>\n"
-          "  %s hash-tree <absolute-path>\n",
+          "  %s hash-tree <absolute-path>\n"
+          "\n"
+          "Options:\n"
+          "  -c, --config <path>  Read this bondage config file.\n"
+          "  -h, --help           Show this help.\n",
           progname, progname, progname, progname, progname, progname, progname,
           progname, progname);
+}
+
+static const struct bondage_command *
+bondage_find_command(const char *name)
+{
+  size_t i;
+
+  for (i = 0; bondage_commands[i].name != NULL; i++) {
+    if (strcmp(bondage_commands[i].name, name) == 0) return &bondage_commands[i];
+  }
+
+  return NULL;
+}
+
+static int
+bondage_global_option_argc(int argc, char **argv)
+{
+  int i = 1;
+
+  while (i < argc) {
+    const char *arg = argv[i];
+
+    if (strcmp(arg, "--") == 0) return i + 1;
+    if (arg[0] != '-' || arg[1] == '\0') return i;
+
+    if (strcmp(arg, "-c") == 0 || strcmp(arg, "--config") == 0) {
+      if (i + 1 >= argc) return argc;
+      i += 2;
+      continue;
+    }
+    if (strncmp(arg, "--config=", 9) == 0) {
+      i++;
+      continue;
+    }
+    if (arg[0] == '-' && arg[1] == 'c' && arg[2] != '\0') {
+      i++;
+      continue;
+    }
+    if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+      i++;
+      continue;
+    }
+
+    /* Let getopt_long report unknown leading options. */
+    i++;
+  }
+
+  return i;
+}
+
+static int
+bondage_parse_global_options(int argc, char **argv,
+                             struct bondage_cli_options *options)
+{
+  static const struct option long_options[] = {
+    {"config", required_argument, NULL, 'c'},
+    {"help", no_argument, NULL, 'h'},
+    {NULL, 0, NULL, 0}
+  };
+  int parse_argc;
+  int option;
+
+  options->config_path = NULL;
+  options->help = 0;
+  options->command_index = 1;
+
+  parse_argc = bondage_global_option_argc(argc, argv);
+  optind = 1;
+  opterr = 0;
+
+  while ((option = getopt_long(parse_argc, argv, ":c:h", long_options, NULL)) != -1) {
+    switch (option) {
+    case 'c':
+      options->config_path = optarg;
+      break;
+    case 'h':
+      options->help = 1;
+      break;
+    case ':':
+      fprintf(stderr, "bondage: option requires an argument: -%c\n", optopt);
+      return 0;
+    case '?':
+    default:
+      fprintf(stderr, "bondage: unknown option: %s\n", argv[optind - 1]);
+      return 0;
+    }
+  }
+
+  options->command_index = parse_argc;
+  if (options->command_index < argc &&
+      strcmp(argv[options->command_index], "--") == 0) {
+    options->command_index++;
+  }
+
+  return 1;
+}
+
+static int
+bondage_consume_optional_config(int argc, char **argv, int index,
+                                const char *global_config,
+                                const char **config_path)
+{
+  if (index < argc) {
+    if (global_config != NULL) {
+      fprintf(stderr,
+              "bondage: config supplied both with --config and positional argument\n");
+      return 0;
+    }
+    *config_path = argv[index];
+    index++;
+  }
+
+  if (index != argc) {
+    fprintf(stderr, "bondage: unexpected argument: %s\n", argv[index]);
+    return 0;
+  }
+
+  return 1;
+}
+
+static int
+bondage_parse_run_args(int argc, char **argv,
+                       const char *global_config,
+                       const char **profile_name,
+                       const char **config_path,
+                       int *passthrough_argc,
+                       char ***passthrough_argv)
+{
+  int index = 0;
+
+  if (argc < 1) return 0;
+
+  *profile_name = argv[index++];
+  *passthrough_argc = 0;
+  *passthrough_argv = NULL;
+
+  if (index < argc && strcmp(argv[index], "--") != 0) {
+    if (global_config != NULL) {
+      fprintf(stderr,
+              "bondage: config supplied both with --config and positional argument\n");
+      return 0;
+    }
+    *config_path = argv[index++];
+  }
+
+  if (index < argc) {
+    if (strcmp(argv[index], "--") != 0) {
+      fprintf(stderr, "bondage: unexpected argument: %s\n", argv[index]);
+      return 0;
+    }
+    index++;
+    *passthrough_argv = &argv[index];
+    *passthrough_argc = argc - index;
+  }
+
+  return 1;
 }
 
 static int
@@ -300,85 +497,122 @@ bondage_hash_path(const char *path, int is_tree)
 int
 bondage_main(int argc, char **argv)
 {
-  const char *config_path = bondage_default_config_path();
+  const struct bondage_command *command;
+  struct bondage_cli_options options;
+  const char *config_path;
+  const char *profile_name;
+  int command_argc;
+  char **command_argv;
   char **passthrough_argv = NULL;
   int passthrough_argc = 0;
-  int do_exec = 0;
 
-  if (argc < 2) {
-    bondage_usage(argv[0]);
+  if (!bondage_parse_global_options(argc, argv, &options)) {
+    bondage_usage(stderr, argv[0]);
     return 2;
   }
 
-  if ((strcmp(argv[1], "argv") == 0 || strcmp(argv[1], "exec") == 0) &&
-      argc >= 3) {
-    do_exec = strcmp(argv[1], "exec") == 0 ? 1 : 0;
-    if (argc >= 4 && strcmp(argv[3], "--") != 0) {
-      config_path = argv[3];
-      if (argc >= 5 && strcmp(argv[4], "--") == 0) {
-        passthrough_argv = &argv[5];
-        passthrough_argc = argc - 5;
-      }
-    }
-    else if (argc >= 4 && strcmp(argv[3], "--") == 0) {
-      passthrough_argv = &argv[4];
-      passthrough_argc = argc - 4;
-    }
-    return bondage_argv_or_exec(argv[2], config_path,
-                                passthrough_argc, passthrough_argv,
-                                do_exec);
+  if (options.help) {
+    bondage_usage(stdout, argv[0]);
+    return 0;
   }
 
-  if (strcmp(argv[1], "status") == 0) {
-    if (argc >= 3) config_path = argv[2];
+  if (options.command_index >= argc) {
+    bondage_usage(stderr, argv[0]);
+    return 2;
+  }
+
+  command = bondage_find_command(argv[options.command_index]);
+  if (command == NULL) {
+    fprintf(stderr, "bondage: unknown command: %s\n", argv[options.command_index]);
+    bondage_usage(stderr, argv[0]);
+    return 2;
+  }
+
+  config_path = options.config_path != NULL ?
+                options.config_path : bondage_default_config_path();
+  command_argc = argc - options.command_index - 1;
+  command_argv = &argv[options.command_index + 1];
+
+  switch (command->kind) {
+  case BONDAGE_CMD_STATUS:
+    if (!bondage_consume_optional_config(command_argc, command_argv, 0,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
     return bondage_status(config_path);
-  }
 
-  if (strcmp(argv[1], "doctor") == 0) {
-    if (argc >= 3) config_path = argv[2];
+  case BONDAGE_CMD_DOCTOR:
+    if (!bondage_consume_optional_config(command_argc, command_argv, 0,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
     return bondage_doctor(config_path);
-  }
 
-  if (strcmp(argv[1], "verify") == 0) {
-    if (argc < 3) {
-      bondage_usage(argv[0]);
+  case BONDAGE_CMD_VERIFY:
+    if (command_argc < 1) {
+      bondage_usage(stderr, argv[0]);
       return 2;
     }
-    if (argc >= 4) config_path = argv[3];
-    return bondage_verify(argv[2], config_path);
-  }
-
-  if (strcmp(argv[1], "repin") == 0) {
-    if (argc < 3) {
-      bondage_usage(argv[0]);
+    profile_name = command_argv[0];
+    if (!bondage_consume_optional_config(command_argc, command_argv, 1,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
       return 2;
     }
-    if (argc >= 4) config_path = argv[3];
-    return bondage_repin(argv[2], config_path);
-  }
+    return bondage_verify(profile_name, config_path);
 
-  if (strcmp(argv[1], "repin-globals") == 0) {
-    if (argc >= 3) config_path = argv[2];
+  case BONDAGE_CMD_REPIN:
+    if (command_argc < 1) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
+    profile_name = command_argv[0];
+    if (!bondage_consume_optional_config(command_argc, command_argv, 1,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
+    return bondage_repin(profile_name, config_path);
+
+  case BONDAGE_CMD_REPIN_GLOBALS:
+    if (!bondage_consume_optional_config(command_argc, command_argv, 0,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
     return bondage_repin_globals(config_path);
-  }
 
-  if (strcmp(argv[1], "hash-file") == 0) {
-    if (argc != 3) {
-      bondage_usage(argv[0]);
+  case BONDAGE_CMD_ARGV:
+  case BONDAGE_CMD_EXEC:
+    if (!bondage_parse_run_args(command_argc, command_argv,
+                                options.config_path, &profile_name,
+                                &config_path, &passthrough_argc,
+                                &passthrough_argv)) {
+      bondage_usage(stderr, argv[0]);
       return 2;
     }
-    return bondage_hash_path(argv[2], 0);
-  }
+    return bondage_argv_or_exec(profile_name, config_path,
+                                passthrough_argc, passthrough_argv,
+                                command->kind == BONDAGE_CMD_EXEC);
 
-  if (strcmp(argv[1], "hash-tree") == 0) {
-    if (argc != 3) {
-      bondage_usage(argv[0]);
+  case BONDAGE_CMD_HASH_FILE:
+    if (command_argc != 1) {
+      bondage_usage(stderr, argv[0]);
       return 2;
     }
-    return bondage_hash_path(argv[2], 1);
+    return bondage_hash_path(command_argv[0], 0);
+
+  case BONDAGE_CMD_HASH_TREE:
+    if (command_argc != 1) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
+    return bondage_hash_path(command_argv[0], 1);
   }
 
-  bondage_usage(argv[0]);
+  bondage_usage(stderr, argv[0]);
   return 2;
 }
 

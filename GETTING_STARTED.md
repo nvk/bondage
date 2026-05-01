@@ -132,10 +132,10 @@ when it declares `inherits = name`. Use narrow names like `agent-nono`,
 The maintenance path should now be:
 
 ```sh
-bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf
-bondage repin codex ~/.config/bondage/bondage.conf
-bondage verify codex ~/.config/bondage/bondage.conf
+bondage --config ~/.config/bondage/bondage.conf doctor
+bondage --config ~/.config/bondage/bondage.conf repin-globals
+bondage --config ~/.config/bondage/bondage.conf repin codex
+bondage --config ~/.config/bondage/bondage.conf verify codex
 ```
 
 Use the commands narrowly:
@@ -260,7 +260,7 @@ Keep shell logic thin.
 Good:
 
 ```sh
-codex() { bondage exec codex ~/.config/bondage/bondage.conf -- "$@"; }
+codex() { bondage --config ~/.config/bondage/bondage.conf exec codex -- "$@"; }
 ```
 
 Bad:
