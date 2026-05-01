@@ -16,6 +16,7 @@
 enum bondage_repin_section {
   BONDAGE_REPIN_SECTION_NONE = 0,
   BONDAGE_REPIN_SECTION_GLOBAL,
+  BONDAGE_REPIN_SECTION_DEFAULTS,
   BONDAGE_REPIN_SECTION_PROFILE
 };
 
@@ -34,7 +35,10 @@ struct bondage_profile_field_update {
   char *old_path;
   char *new_path;
   char *new_fp;
-  struct bondage_named_list profiles;
+  struct bondage_field_owner path_owner;
+  struct bondage_field_owner fp_owner;
+  struct bondage_named_list path_profiles;
+  struct bondage_named_list fp_profiles;
 };
 
 struct bondage_repin_plan {
@@ -136,12 +140,64 @@ bondage_named_list_contains(const struct bondage_named_list *list, const char *v
 }
 
 static void
+bondage_free_field_owner(struct bondage_field_owner *owner)
+{
+  free(owner->name);
+  owner->name = NULL;
+  owner->kind = BONDAGE_OWNER_NONE;
+}
+
+static int
+bondage_copy_field_owner(struct bondage_field_owner *dst,
+                         const struct bondage_field_owner *src,
+                         char *errbuf,
+                         size_t errbufsz)
+{
+  char *copy = NULL;
+
+  if (src->name != NULL) {
+    copy = bondage_xstrdup(src->name);
+    if (copy == NULL) {
+      bondage_set_error(errbuf, errbufsz, "out of memory");
+      return 0;
+    }
+  }
+
+  bondage_free_field_owner(dst);
+  dst->kind = src->kind;
+  dst->name = copy;
+  return 1;
+}
+
+static int
+bondage_field_owner_matches(const struct bondage_field_owner *owner,
+                            enum bondage_owner_kind kind,
+                            const char *name)
+{
+  if (owner->kind != kind) return 0;
+  if (kind == BONDAGE_OWNER_PROFILE) return 1;
+  if (owner->name == NULL || name == NULL) return 0;
+  return strcmp(owner->name, name) == 0;
+}
+
+static const char *
+bondage_owner_label(const struct bondage_field_owner *owner)
+{
+  if (owner->kind == BONDAGE_OWNER_DEFAULT) return "defaults";
+  if (owner->kind == BONDAGE_OWNER_PROFILE) return "profile";
+  return "unknown";
+}
+
+static void
 bondage_profile_field_update_free(struct bondage_profile_field_update *update)
 {
   free(update->old_path);
   free(update->new_path);
   free(update->new_fp);
-  bondage_named_list_free(&update->profiles);
+  bondage_free_field_owner(&update->path_owner);
+  bondage_free_field_owner(&update->fp_owner);
+  bondage_named_list_free(&update->path_profiles);
+  bondage_named_list_free(&update->fp_profiles);
   memset(update, 0, sizeof(*update));
 }
 
@@ -176,6 +232,20 @@ bondage_trim(char *value)
   }
 
   return value;
+}
+
+static int
+bondage_parse_defaults_section(char *namebuf, char **defaults_name)
+{
+  const char prefix[] = "defaults \"";
+  size_t len = strlen(namebuf);
+
+  if (strncmp(namebuf, prefix, sizeof(prefix) - 1) != 0) return 0;
+  if (len < sizeof(prefix) || namebuf[len - 1] != '"') return 0;
+
+  namebuf[len - 1] = '\0';
+  *defaults_name = namebuf + (sizeof(prefix) - 1);
+  return **defaults_name != '\0';
 }
 
 static int
@@ -452,24 +522,40 @@ bondage_prepare_global_update(struct bondage_value_update *path_update,
 static int
 bondage_collect_matching_profiles(struct bondage_named_list *out,
                                   const struct bondage_config *config,
-                                  const char *field_value,
+                                  const char *path_value,
                                   int which,
+                                  int owner_is_fp,
+                                  const struct bondage_field_owner *owner,
                                   char *errbuf,
                                   size_t errbufsz)
 {
   size_t i;
 
-  if (field_value == NULL) return 1;
+  if (path_value == NULL || owner->kind == BONDAGE_OWNER_NONE) return 1;
 
   for (i = 0; i < config->profile_count; i++) {
     const struct bondage_profile *profile = &config->profiles[i];
     const char *candidate = NULL;
+    const struct bondage_field_owner *candidate_owner = NULL;
 
-    if (which == 0) candidate = profile->target;
-    else if (which == 1) candidate = profile->interpreter;
-    else candidate = profile->package_root;
+    if (which == 0) {
+      candidate = profile->target;
+      candidate_owner = owner_is_fp ? &profile->target_fp_owner
+                                    : &profile->target_owner;
+    }
+    else if (which == 1) {
+      candidate = profile->interpreter;
+      candidate_owner = owner_is_fp ? &profile->interpreter_fp_owner
+                                    : &profile->interpreter_owner;
+    }
+    else {
+      candidate = profile->package_root;
+      candidate_owner = owner_is_fp ? &profile->package_tree_fp_owner
+                                    : &profile->package_root_owner;
+    }
 
-    if (candidate != NULL && strcmp(candidate, field_value) == 0) {
+    if (candidate != NULL && strcmp(candidate, path_value) == 0 &&
+        bondage_field_owner_matches(candidate_owner, owner->kind, owner->name)) {
       if (!bondage_named_list_append(out, profile->name, errbuf, errbufsz)) {
         return 0;
       }
@@ -488,18 +574,26 @@ bondage_prepare_profile_update(struct bondage_profile_field_update *update,
                                size_t errbufsz)
 {
   const char *source_path = NULL;
+  const struct bondage_field_owner *path_owner = NULL;
+  const struct bondage_field_owner *fp_owner = NULL;
   int require_exec = 0;
 
   if (which == 0) {
     source_path = selected->target;
+    path_owner = &selected->target_owner;
+    fp_owner = &selected->target_fp_owner;
     require_exec = strcmp(selected->target_kind, "native") == 0;
   }
   else if (which == 1) {
     source_path = selected->interpreter;
+    path_owner = &selected->interpreter_owner;
+    fp_owner = &selected->interpreter_fp_owner;
     require_exec = 1;
   }
   else {
     source_path = selected->package_root;
+    path_owner = &selected->package_root_owner;
+    fp_owner = &selected->package_tree_fp_owner;
   }
 
   if (source_path == NULL) return 1;
@@ -511,10 +605,23 @@ bondage_prepare_profile_update(struct bondage_profile_field_update *update,
     return 0;
   }
 
-  if (!bondage_collect_matching_profiles(&update->profiles, config, source_path,
-                                         which, errbuf, errbufsz)) {
+  if (!bondage_copy_field_owner(&update->path_owner, path_owner,
+                                errbuf, errbufsz)) {
     return 0;
   }
+  if (!bondage_copy_field_owner(&update->fp_owner, fp_owner,
+                                errbuf, errbufsz)) {
+    return 0;
+  }
+
+  if (!bondage_collect_matching_profiles(&update->path_profiles, config,
+                                         source_path, which, 0,
+                                         &update->path_owner,
+                                         errbuf, errbufsz)) return 0;
+  if (!bondage_collect_matching_profiles(&update->fp_profiles, config,
+                                         source_path, which, 1,
+                                         &update->fp_owner,
+                                         errbuf, errbufsz)) return 0;
 
   if (!bondage_resolve_path(source_path, &update->new_path, errbuf, errbufsz)) {
     return 0;
@@ -634,10 +741,14 @@ bondage_profile_field_update_needed(const struct bondage_profile_field_update *u
 
 static const char *
 bondage_profile_field_replacement(const struct bondage_repin_plan *plan,
-                                  const char *profile_name,
+                                  enum bondage_repin_section section,
+                                  const char *section_name,
                                   const char *key)
 {
   const struct bondage_profile_field_update *update = NULL;
+  const struct bondage_field_owner *owner = NULL;
+  const struct bondage_named_list *profiles = NULL;
+  int path_key = 0;
 
   if (strcmp(key, "target") == 0 || strcmp(key, "target_fp") == 0) {
     update = &plan->target;
@@ -652,12 +763,38 @@ bondage_profile_field_replacement(const struct bondage_repin_plan *plan,
     return NULL;
   }
 
-  if (!update->active || !bondage_named_list_contains(&update->profiles, profile_name)) {
+  if (!update->active) {
     return NULL;
   }
 
   if (strcmp(key, "target") == 0 || strcmp(key, "interpreter") == 0 ||
       strcmp(key, "package_root") == 0) {
+    owner = &update->path_owner;
+    profiles = &update->path_profiles;
+    path_key = 1;
+  }
+  else {
+    owner = &update->fp_owner;
+    profiles = &update->fp_profiles;
+  }
+
+  if (section == BONDAGE_REPIN_SECTION_DEFAULTS) {
+    if (owner->kind != BONDAGE_OWNER_DEFAULT || owner->name == NULL ||
+        section_name == NULL || strcmp(owner->name, section_name) != 0) {
+      return NULL;
+    }
+  }
+  else if (section == BONDAGE_REPIN_SECTION_PROFILE) {
+    if (owner->kind != BONDAGE_OWNER_PROFILE ||
+        !bondage_named_list_contains(profiles, section_name)) {
+      return NULL;
+    }
+  }
+  else {
+    return NULL;
+  }
+
+  if (path_key) {
     return update->new_path;
   }
 
@@ -707,14 +844,14 @@ bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan 
   FILE *in = NULL;
   FILE *out = NULL;
   char *tmp_path = NULL;
-  char current_profile[512];
+  char current_section_name[512];
   char line[4096];
   enum bondage_repin_section section = BONDAGE_REPIN_SECTION_NONE;
   int fd = -1;
   struct stat st;
   int ok = 0;
 
-  current_profile[0] = '\0';
+  current_section_name[0] = '\0';
 
   in = fopen(config_path, "r");
   if (in == NULL) {
@@ -770,9 +907,10 @@ bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan 
     if (*trimmed == '[') {
       size_t len = strlen(trimmed);
 
-      current_profile[0] = '\0';
+      current_section_name[0] = '\0';
       if (len >= 3 && trimmed[len - 1] == ']') {
         char *namebuf;
+        char *defaults_name = NULL;
         char *profile_name = NULL;
 
         trimmed[len - 1] = '\0';
@@ -780,9 +918,15 @@ bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan 
         if (strcmp(namebuf, "global") == 0) {
           section = BONDAGE_REPIN_SECTION_GLOBAL;
         }
+        else if (bondage_parse_defaults_section(namebuf, &defaults_name)) {
+          section = BONDAGE_REPIN_SECTION_DEFAULTS;
+          snprintf(current_section_name, sizeof(current_section_name),
+                   "%s", defaults_name);
+        }
         else if (bondage_parse_profile_section(namebuf, &profile_name)) {
           section = BONDAGE_REPIN_SECTION_PROFILE;
-          snprintf(current_profile, sizeof(current_profile), "%s", profile_name);
+          snprintf(current_section_name, sizeof(current_section_name),
+                   "%s", profile_name);
         }
         else {
           section = BONDAGE_REPIN_SECTION_NONE;
@@ -820,8 +964,12 @@ bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan 
     if (section == BONDAGE_REPIN_SECTION_GLOBAL) {
       replacement = bondage_global_replacement(plan, key);
     }
-    else if (section == BONDAGE_REPIN_SECTION_PROFILE && current_profile[0] != '\0') {
-      replacement = bondage_profile_field_replacement(plan, current_profile, key);
+    else if ((section == BONDAGE_REPIN_SECTION_DEFAULTS ||
+              section == BONDAGE_REPIN_SECTION_PROFILE) &&
+             current_section_name[0] != '\0') {
+      replacement = bondage_profile_field_replacement(plan, section,
+                                                      current_section_name,
+                                                      key);
     }
 
     if (replacement != NULL) {
@@ -873,10 +1021,36 @@ cleanup:
 }
 
 static void
-bondage_print_repin_summary(const struct bondage_repin_plan *plan)
+bondage_print_named_list(const struct bondage_named_list *list)
 {
   size_t i;
 
+  for (i = 0; i < list->count; i++) {
+    printf("%s%s", i == 0 ? " " : ", ", list->items[i]);
+  }
+}
+
+static void
+bondage_print_update_owner(const char *key,
+                           const struct bondage_field_owner *owner,
+                           const struct bondage_named_list *profiles)
+{
+  if (owner->kind == BONDAGE_OWNER_DEFAULT && owner->name != NULL) {
+    printf("updated %s in defaults \"%s\"", key, owner->name);
+  }
+  else if (owner->kind == BONDAGE_OWNER_PROFILE) {
+    printf("updated %s for profiles:", key);
+    bondage_print_named_list(profiles);
+  }
+  else {
+    printf("updated %s in unknown owner", key);
+  }
+  printf("\n");
+}
+
+static void
+bondage_print_repin_summary(const struct bondage_repin_plan *plan)
+{
   if (plan->global_nono.active) {
     printf("updated global nono: %s\n", plan->global_nono.value);
   }
@@ -888,29 +1062,26 @@ bondage_print_repin_summary(const struct bondage_repin_plan *plan)
   }
 
   if (plan->target.active) {
-    printf("updated target for profiles:");
-    for (i = 0; i < plan->target.profiles.count; i++) {
-      printf("%s%s", i == 0 ? " " : ", ", plan->target.profiles.items[i]);
-    }
-    printf("\n");
+    bondage_print_update_owner("target", &plan->target.path_owner,
+                               &plan->target.path_profiles);
+    bondage_print_update_owner("target_fp", &plan->target.fp_owner,
+                               &plan->target.fp_profiles);
     printf("target: %s\n", plan->target.new_path);
   }
 
   if (plan->interpreter.active) {
-    printf("updated interpreter for profiles:");
-    for (i = 0; i < plan->interpreter.profiles.count; i++) {
-      printf("%s%s", i == 0 ? " " : ", ", plan->interpreter.profiles.items[i]);
-    }
-    printf("\n");
+    bondage_print_update_owner("interpreter", &plan->interpreter.path_owner,
+                               &plan->interpreter.path_profiles);
+    bondage_print_update_owner("interpreter_fp", &plan->interpreter.fp_owner,
+                               &plan->interpreter.fp_profiles);
     printf("interpreter: %s\n", plan->interpreter.new_path);
   }
 
   if (plan->package_root.active) {
-    printf("updated package_root for profiles:");
-    for (i = 0; i < plan->package_root.profiles.count; i++) {
-      printf("%s%s", i == 0 ? " " : ", ", plan->package_root.profiles.items[i]);
-    }
-    printf("\n");
+    bondage_print_update_owner("package_root", &plan->package_root.path_owner,
+                               &plan->package_root.path_profiles);
+    bondage_print_update_owner("package_tree_fp", &plan->package_root.fp_owner,
+                               &plan->package_root.fp_profiles);
     printf("package_root: %s\n", plan->package_root.new_path);
   }
 }
@@ -979,6 +1150,21 @@ bondage_print_doctor_global_issue(const char *label,
 }
 
 static void
+bondage_print_doctor_owner_line(const char *label,
+                                const struct bondage_field_owner *owner)
+{
+  if (owner->kind == BONDAGE_OWNER_DEFAULT && owner->name != NULL) {
+    printf("  %s via defaults \"%s\"\n", label, owner->name);
+  }
+  else if (owner->kind == BONDAGE_OWNER_PROFILE && owner->name != NULL) {
+    printf("  %s via profile \"%s\"\n", label, owner->name);
+  }
+  else {
+    printf("  %s via %s\n", label, bondage_owner_label(owner));
+  }
+}
+
+static void
 bondage_print_doctor_profile_issue(const struct bondage_profile *profile,
                                    const struct bondage_repin_plan *plan)
 {
@@ -991,7 +1177,14 @@ bondage_print_doctor_profile_issue(const struct bondage_profile *profile,
       printf("profile %s: stale\n", profile->name);
       header = 1;
     }
-    printf("  target\n");
+    bondage_print_doctor_owner_line("target", &plan->target.path_owner);
+    if (plan->target.fp_owner.kind != plan->target.path_owner.kind ||
+        ((plan->target.fp_owner.name == NULL) !=
+         (plan->target.path_owner.name == NULL)) ||
+        (plan->target.fp_owner.name != NULL &&
+         strcmp(plan->target.fp_owner.name, plan->target.path_owner.name) != 0)) {
+      bondage_print_doctor_owner_line("target_fp", &plan->target.fp_owner);
+    }
     if (profile->target != NULL && strcmp(profile->target, plan->target.new_path) != 0) {
       printf("    configured: %s\n", profile->target);
       printf("    current:    %s\n", plan->target.new_path);
@@ -1009,7 +1202,15 @@ bondage_print_doctor_profile_issue(const struct bondage_profile *profile,
       printf("profile %s: stale\n", profile->name);
       header = 1;
     }
-    printf("  interpreter\n");
+    bondage_print_doctor_owner_line("interpreter", &plan->interpreter.path_owner);
+    if (plan->interpreter.fp_owner.kind != plan->interpreter.path_owner.kind ||
+        ((plan->interpreter.fp_owner.name == NULL) !=
+         (plan->interpreter.path_owner.name == NULL)) ||
+        (plan->interpreter.fp_owner.name != NULL &&
+         strcmp(plan->interpreter.fp_owner.name,
+                plan->interpreter.path_owner.name) != 0)) {
+      bondage_print_doctor_owner_line("interpreter_fp", &plan->interpreter.fp_owner);
+    }
     if (profile->interpreter != NULL &&
         strcmp(profile->interpreter, plan->interpreter.new_path) != 0) {
       printf("    configured: %s\n", profile->interpreter);
@@ -1029,7 +1230,17 @@ bondage_print_doctor_profile_issue(const struct bondage_profile *profile,
       printf("profile %s: stale\n", profile->name);
       header = 1;
     }
-    printf("  package_root\n");
+    bondage_print_doctor_owner_line("package_root",
+                                    &plan->package_root.path_owner);
+    if (plan->package_root.fp_owner.kind != plan->package_root.path_owner.kind ||
+        ((plan->package_root.fp_owner.name == NULL) !=
+         (plan->package_root.path_owner.name == NULL)) ||
+        (plan->package_root.fp_owner.name != NULL &&
+         strcmp(plan->package_root.fp_owner.name,
+                plan->package_root.path_owner.name) != 0)) {
+      bondage_print_doctor_owner_line("package_tree_fp",
+                                      &plan->package_root.fp_owner);
+    }
     if (profile->package_root != NULL &&
         strcmp(profile->package_root, plan->package_root.new_path) != 0) {
       printf("    configured: %s\n", profile->package_root);

@@ -9,6 +9,7 @@
 enum bondage_section {
   BONDAGE_SECTION_NONE = 0,
   BONDAGE_SECTION_GLOBAL,
+  BONDAGE_SECTION_DEFAULTS,
   BONDAGE_SECTION_PROFILE
 };
 
@@ -37,6 +38,9 @@ bondage_xstrdup(const char *value)
   memcpy(copy, value, len + 1);
   return copy;
 }
+
+static char *
+bondage_trim(char *value);
 
 static void
 bondage_free_string_list(struct bondage_string_list *list)
@@ -77,6 +81,68 @@ bondage_string_list_append(struct bondage_string_list *list, const char *value,
 }
 
 static int
+bondage_string_list_contains(const struct bondage_string_list *list,
+                             const char *value)
+{
+  size_t i;
+
+  for (i = 0; i < list->count; i++) {
+    if (strcmp(list->items[i], value) == 0) return 1;
+  }
+
+  return 0;
+}
+
+static int
+bondage_string_list_append_csv(struct bondage_string_list *list,
+                               const char *value,
+                               char *errbuf,
+                               size_t errbufsz)
+{
+  char *copy = bondage_xstrdup(value);
+  char *cursor;
+
+  if (copy == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+
+  cursor = copy;
+  while (cursor != NULL) {
+    char *comma = strchr(cursor, ',');
+    char *item;
+
+    if (comma != NULL) {
+      *comma = '\0';
+    }
+
+    item = bondage_trim(cursor);
+    if (*item == '\0') {
+      free(copy);
+      bondage_set_error(errbuf, errbufsz, "empty inherited defaults name");
+      return 0;
+    }
+
+    if (bondage_string_list_contains(list, item)) {
+      bondage_set_error(errbuf, errbufsz,
+                        "duplicate inherited defaults '%s'", item);
+      free(copy);
+      return 0;
+    }
+
+    if (!bondage_string_list_append(list, item, errbuf, errbufsz)) {
+      free(copy);
+      return 0;
+    }
+
+    cursor = comma == NULL ? NULL : comma + 1;
+  }
+
+  free(copy);
+  return 1;
+}
+
+static int
 bondage_parse_bool(const char *value, int *out, char *errbuf, size_t errbufsz)
 {
   if (strcmp(value, "true") == 0 || strcmp(value, "yes") == 0 ||
@@ -112,9 +178,41 @@ bondage_trim(char *value)
 }
 
 static void
+bondage_free_field_owner(struct bondage_field_owner *owner)
+{
+  free(owner->name);
+  owner->name = NULL;
+  owner->kind = BONDAGE_OWNER_NONE;
+}
+
+static int
+bondage_replace_field_owner(struct bondage_field_owner *owner,
+                            enum bondage_owner_kind kind,
+                            const char *name,
+                            char *errbuf,
+                            size_t errbufsz)
+{
+  char *copy = NULL;
+
+  if (name != NULL) {
+    copy = bondage_xstrdup(name);
+    if (copy == NULL) {
+      bondage_set_error(errbuf, errbufsz, "out of memory");
+      return 0;
+    }
+  }
+
+  bondage_free_field_owner(owner);
+  owner->kind = kind;
+  owner->name = copy;
+  return 1;
+}
+
+static void
 bondage_free_profile(struct bondage_profile *profile)
 {
   free(profile->name);
+  bondage_free_string_list(&profile->inherits);
   free(profile->namespace_name);
   free(profile->nono_profile);
   free(profile->touch_policy);
@@ -130,6 +228,12 @@ bondage_free_profile(struct bondage_profile *profile)
   bondage_free_string_list(&profile->env_set);
   bondage_free_string_list(&profile->env_command);
   bondage_free_string_list(&profile->ensure_dir);
+  bondage_free_field_owner(&profile->target_owner);
+  bondage_free_field_owner(&profile->target_fp_owner);
+  bondage_free_field_owner(&profile->interpreter_owner);
+  bondage_free_field_owner(&profile->interpreter_fp_owner);
+  bondage_free_field_owner(&profile->package_root_owner);
+  bondage_free_field_owner(&profile->package_tree_fp_owner);
   memset(profile, 0, sizeof(*profile));
 }
 
@@ -170,17 +274,83 @@ bondage_parse_value(char *raw, char **out, char *errbuf, size_t errbufsz)
 }
 
 static int
-bondage_parse_profile_section(char *namebuf, char **profile_name)
+bondage_parse_named_section(char *namebuf, const char *section_name,
+                            char **value_name)
 {
-  const char prefix[] = "profile \"";
+  char prefix[64];
   size_t len = strlen(namebuf);
+  size_t prefix_len;
 
-  if (strncmp(namebuf, prefix, sizeof(prefix) - 1) != 0) return 0;
-  if (len < sizeof(prefix) || namebuf[len - 1] != '"') return 0;
+  snprintf(prefix, sizeof(prefix), "%s \"", section_name);
+  prefix_len = strlen(prefix);
+
+  if (strncmp(namebuf, prefix, prefix_len) != 0) return 0;
+  if (len <= prefix_len || namebuf[len - 1] != '"') return 0;
 
   namebuf[len - 1] = '\0';
-  *profile_name = namebuf + (sizeof(prefix) - 1);
-  return **profile_name != '\0';
+  *value_name = namebuf + prefix_len;
+  return **value_name != '\0';
+}
+
+static int
+bondage_parse_defaults_section(char *namebuf, char **defaults_name)
+{
+  return bondage_parse_named_section(namebuf, "defaults", defaults_name);
+}
+
+static int
+bondage_parse_profile_section(char *namebuf, char **profile_name)
+{
+  return bondage_parse_named_section(namebuf, "profile", profile_name);
+}
+
+static const struct bondage_profile *
+bondage_find_defaults(const struct bondage_config *config, const char *name)
+{
+  size_t i;
+
+  for (i = 0; i < config->default_count; i++) {
+    if (config->defaults[i].name != NULL &&
+        strcmp(config->defaults[i].name, name) == 0) {
+      return &config->defaults[i];
+    }
+  }
+
+  return NULL;
+}
+
+static int
+bondage_push_defaults(struct bondage_config *config, const char *name,
+                      struct bondage_profile **out, char *errbuf, size_t errbufsz)
+{
+  struct bondage_profile *defaults;
+  struct bondage_profile *block;
+
+  if (bondage_find_defaults(config, name) != NULL) {
+    bondage_set_error(errbuf, errbufsz, "duplicate defaults '%s'", name);
+    return 0;
+  }
+
+  defaults = realloc(config->defaults,
+                     sizeof(struct bondage_profile) * (config->default_count + 1));
+  if (defaults == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+
+  config->defaults = defaults;
+  block = &config->defaults[config->default_count];
+  memset(block, 0, sizeof(*block));
+  config->default_count++;
+
+  block->name = bondage_xstrdup(name);
+  if (block->name == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+
+  *out = block;
+  return 1;
 }
 
 static int
@@ -200,8 +370,6 @@ bondage_push_profile(struct bondage_config *config, const char *name,
   config->profiles = profiles;
   profile = &config->profiles[config->profile_count];
   memset(profile, 0, sizeof(*profile));
-  profile->use_envchain = 1;
-  profile->use_nono = 1;
   config->profile_count++;
 
   profile->name = bondage_xstrdup(name);
@@ -249,13 +417,30 @@ bondage_assign_global(struct bondage_global *global, const char *key,
 
 static int
 bondage_assign_profile(struct bondage_profile *profile, const char *key,
-                       const char *value, char *errbuf, size_t errbufsz)
+                       const char *value, int allow_inherits,
+                       char *errbuf, size_t errbufsz)
 {
   if (strcmp(key, "use_envchain") == 0) {
-    return bondage_parse_bool(value, &profile->use_envchain, errbuf, errbufsz);
+    if (!bondage_parse_bool(value, &profile->use_envchain, errbuf, errbufsz)) {
+      return 0;
+    }
+    profile->use_envchain_set = 1;
+    return 1;
   }
   if (strcmp(key, "use_nono") == 0) {
-    return bondage_parse_bool(value, &profile->use_nono, errbuf, errbufsz);
+    if (!bondage_parse_bool(value, &profile->use_nono, errbuf, errbufsz)) {
+      return 0;
+    }
+    profile->use_nono_set = 1;
+    return 1;
+  }
+  if (strcmp(key, "inherits") == 0) {
+    if (!allow_inherits) {
+      bondage_set_error(errbuf, errbufsz, "inherits is only valid in profile sections");
+      return 0;
+    }
+    return bondage_string_list_append_csv(&profile->inherits, value,
+                                          errbuf, errbufsz);
   }
   if (strcmp(key, "namespace") == 0) {
     return bondage_replace_string(&profile->namespace_name, value, errbuf, errbufsz);
@@ -288,7 +473,11 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
     return bondage_replace_string(&profile->package_tree_fp, value, errbuf, errbufsz);
   }
   if (strcmp(key, "nono_allow_cwd") == 0) {
-    return bondage_parse_bool(value, &profile->nono_allow_cwd, errbuf, errbufsz);
+    if (!bondage_parse_bool(value, &profile->nono_allow_cwd, errbuf, errbufsz)) {
+      return 0;
+    }
+    profile->nono_allow_cwd_set = 1;
+    return 1;
   }
   if (strcmp(key, "nono_allow_file") == 0) {
     return bondage_string_list_append(&profile->nono_allow_files, value,
@@ -310,6 +499,186 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
 
   bondage_set_error(errbuf, errbufsz, "unknown profile key '%s'", key);
   return 0;
+}
+
+static int
+bondage_copy_string_list(struct bondage_string_list *dst,
+                         const struct bondage_string_list *src,
+                         char *errbuf,
+                         size_t errbufsz)
+{
+  size_t i;
+
+  for (i = 0; i < src->count; i++) {
+    if (!bondage_string_list_append(dst, src->items[i], errbuf, errbufsz)) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+static int
+bondage_apply_string(char **dst,
+                     const char *src,
+                     char *errbuf,
+                     size_t errbufsz)
+{
+  if (src == NULL) return 1;
+  return bondage_replace_string(dst, src, errbuf, errbufsz);
+}
+
+static int
+bondage_apply_owned_string(char **dst,
+                           struct bondage_field_owner *owner,
+                           const char *src,
+                           enum bondage_owner_kind owner_kind,
+                           const char *owner_name,
+                           char *errbuf,
+                           size_t errbufsz)
+{
+  if (src == NULL) return 1;
+  if (!bondage_replace_string(dst, src, errbuf, errbufsz)) return 0;
+  return bondage_replace_field_owner(owner, owner_kind, owner_name,
+                                     errbuf, errbufsz);
+}
+
+static int
+bondage_apply_profile_values(struct bondage_profile *dst,
+                             const struct bondage_profile *src,
+                             enum bondage_owner_kind owner_kind,
+                             const char *owner_name,
+                             char *errbuf,
+                             size_t errbufsz)
+{
+  if (src->use_envchain_set) {
+    dst->use_envchain = src->use_envchain;
+    dst->use_envchain_set = 1;
+  }
+  if (src->use_nono_set) {
+    dst->use_nono = src->use_nono;
+    dst->use_nono_set = 1;
+  }
+  if (src->nono_allow_cwd_set) {
+    dst->nono_allow_cwd = src->nono_allow_cwd;
+    dst->nono_allow_cwd_set = 1;
+  }
+
+  if (!bondage_apply_string(&dst->namespace_name, src->namespace_name,
+                            errbuf, errbufsz)) return 0;
+  if (!bondage_apply_string(&dst->nono_profile, src->nono_profile,
+                            errbuf, errbufsz)) return 0;
+  if (!bondage_apply_string(&dst->touch_policy, src->touch_policy,
+                            errbuf, errbufsz)) return 0;
+  if (!bondage_apply_string(&dst->target_kind, src->target_kind,
+                            errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->target, &dst->target_owner,
+                                  src->target, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->target_fp, &dst->target_fp_owner,
+                                  src->target_fp, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->interpreter, &dst->interpreter_owner,
+                                  src->interpreter, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->interpreter_fp,
+                                  &dst->interpreter_fp_owner,
+                                  src->interpreter_fp, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->package_root,
+                                  &dst->package_root_owner,
+                                  src->package_root, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+  if (!bondage_apply_owned_string(&dst->package_tree_fp,
+                                  &dst->package_tree_fp_owner,
+                                  src->package_tree_fp, owner_kind, owner_name,
+                                  errbuf, errbufsz)) return 0;
+
+  if (!bondage_copy_string_list(&dst->nono_allow_files, &src->nono_allow_files,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->nono_read_files, &src->nono_read_files,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->env_set, &src->env_set,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->env_command, &src->env_command,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->ensure_dir, &src->ensure_dir,
+                                errbuf, errbufsz)) return 0;
+
+  return 1;
+}
+
+static int
+bondage_resolve_profile(const struct bondage_config *config,
+                        const struct bondage_profile *raw,
+                        struct bondage_profile *resolved,
+                        char *errbuf,
+                        size_t errbufsz)
+{
+  size_t i;
+
+  memset(resolved, 0, sizeof(*resolved));
+  resolved->use_envchain = 1;
+  resolved->use_nono = 1;
+
+  resolved->name = bondage_xstrdup(raw->name);
+  if (resolved->name == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+
+  if (!bondage_copy_string_list(&resolved->inherits, &raw->inherits,
+                                errbuf, errbufsz)) {
+    return 0;
+  }
+
+  for (i = 0; i < raw->inherits.count; i++) {
+    const char *defaults_name = raw->inherits.items[i];
+    const struct bondage_profile *defaults_block =
+      bondage_find_defaults(config, defaults_name);
+
+    if (defaults_block == NULL) {
+      bondage_set_error(errbuf, errbufsz,
+                        "profile '%s' inherits unknown defaults '%s'",
+                        raw->name, defaults_name);
+      return 0;
+    }
+
+    if (!bondage_apply_profile_values(resolved, defaults_block,
+                                      BONDAGE_OWNER_DEFAULT, defaults_name,
+                                      errbuf, errbufsz)) {
+      return 0;
+    }
+  }
+
+  return bondage_apply_profile_values(resolved, raw,
+                                      BONDAGE_OWNER_PROFILE, raw->name,
+                                      errbuf, errbufsz);
+}
+
+static int
+bondage_resolve_profiles(struct bondage_config *config,
+                         char *errbuf,
+                         size_t errbufsz)
+{
+  size_t i;
+
+  for (i = 0; i < config->profile_count; i++) {
+    struct bondage_profile raw = config->profiles[i];
+    struct bondage_profile resolved;
+
+    memset(&config->profiles[i], 0, sizeof(config->profiles[i]));
+    if (!bondage_resolve_profile(config, &raw, &resolved, errbuf, errbufsz)) {
+      bondage_free_profile(&resolved);
+      bondage_free_profile(&raw);
+      return 0;
+    }
+
+    bondage_free_profile(&raw);
+    config->profiles[i] = resolved;
+  }
+
+  return 1;
 }
 
 static int
@@ -514,10 +883,15 @@ bondage_config_free(struct bondage_config *config)
   free(config->global.touchid_fp);
   free(config->global.tool_root);
 
+  for (i = 0; i < config->default_count; i++) {
+    bondage_free_profile(&config->defaults[i]);
+  }
+
   for (i = 0; i < config->profile_count; i++) {
     bondage_free_profile(&config->profiles[i]);
   }
 
+  free(config->defaults);
   free(config->profiles);
   memset(config, 0, sizeof(*config));
 }
@@ -530,6 +904,7 @@ bondage_config_load(const char *path, struct bondage_config *config,
   char line[4096];
   unsigned long lineno = 0;
   enum bondage_section section = BONDAGE_SECTION_NONE;
+  struct bondage_profile *current_defaults = NULL;
   struct bondage_profile *current_profile = NULL;
 
   fp = fopen(path, "r");
@@ -553,6 +928,7 @@ bondage_config_load(const char *path, struct bondage_config *config,
     if (*cursor == '[') {
       size_t len = strlen(cursor);
       char *namebuf;
+      char *defaults_name = NULL;
       char *profile_name = NULL;
 
       if (len < 3 || cursor[len - 1] != ']') {
@@ -567,12 +943,25 @@ bondage_config_load(const char *path, struct bondage_config *config,
 
       if (strcmp(namebuf, "global") == 0) {
         section = BONDAGE_SECTION_GLOBAL;
+        current_defaults = NULL;
         current_profile = NULL;
+        continue;
+      }
+
+      if (bondage_parse_defaults_section(namebuf, &defaults_name)) {
+        section = BONDAGE_SECTION_DEFAULTS;
+        current_profile = NULL;
+        if (!bondage_push_defaults(config, defaults_name, &current_defaults,
+                                   errbuf, errbufsz)) {
+          fclose(fp);
+          return 0;
+        }
         continue;
       }
 
       if (bondage_parse_profile_section(namebuf, &profile_name)) {
         section = BONDAGE_SECTION_PROFILE;
+        current_defaults = NULL;
         if (!bondage_push_profile(config, profile_name, &current_profile,
                                   errbuf, errbufsz)) {
           fclose(fp);
@@ -619,8 +1008,22 @@ bondage_config_load(const char *path, struct bondage_config *config,
       continue;
     }
 
+    if (section == BONDAGE_SECTION_DEFAULTS && current_defaults != NULL) {
+      if (!bondage_assign_profile(current_defaults, key, value, 0,
+                                  errbuf, errbufsz)) {
+        char assign_err[256];
+        snprintf(assign_err, sizeof(assign_err), "%s", errbuf);
+        bondage_set_error(errbuf, errbufsz,
+                          "%s:%lu: %s", path, lineno, assign_err);
+        fclose(fp);
+        return 0;
+      }
+      continue;
+    }
+
     if (section == BONDAGE_SECTION_PROFILE && current_profile != NULL) {
-      if (!bondage_assign_profile(current_profile, key, value, errbuf, errbufsz)) {
+      if (!bondage_assign_profile(current_profile, key, value, 1,
+                                  errbuf, errbufsz)) {
         char assign_err[256];
         snprintf(assign_err, sizeof(assign_err), "%s", errbuf);
         bondage_set_error(errbuf, errbufsz,
@@ -638,6 +1041,10 @@ bondage_config_load(const char *path, struct bondage_config *config,
   }
 
   fclose(fp);
+
+  if (!bondage_resolve_profiles(config, errbuf, errbufsz)) {
+    return 0;
+  }
 
   if (!bondage_validate_config(config, errbuf, errbufsz)) {
     return 0;

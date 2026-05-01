@@ -71,9 +71,37 @@ bondage_load_profile(const char *profile_name, const char *config_path,
 }
 
 static void
+bondage_print_inherits(const struct bondage_profile *profile, const char *prefix)
+{
+  size_t i;
+
+  if (profile->inherits.count == 0) return;
+
+  printf("%sinherits:", prefix);
+  for (i = 0; i < profile->inherits.count; i++) {
+    printf("%s%s", i == 0 ? " " : ", ", profile->inherits.items[i]);
+  }
+  printf("\n");
+}
+
+static void
+bondage_print_owner(const char *prefix,
+                    const char *label,
+                    const struct bondage_field_owner *owner)
+{
+  if (owner->kind == BONDAGE_OWNER_DEFAULT && owner->name != NULL) {
+    printf("%s%s_owner: defaults \"%s\"\n", prefix, label, owner->name);
+  }
+  else if (owner->kind == BONDAGE_OWNER_PROFILE && owner->name != NULL) {
+    printf("%s%s_owner: profile \"%s\"\n", prefix, label, owner->name);
+  }
+}
+
+static void
 bondage_print_profile_header(const struct bondage_profile *profile)
 {
   printf("profile: %s\n", profile->name);
+  bondage_print_inherits(profile, "");
   printf("use_envchain: %s\n", profile->use_envchain ? "true" : "false");
   if (profile->namespace_name != NULL) {
     printf("namespace: %s\n", profile->namespace_name);
@@ -85,11 +113,14 @@ bondage_print_profile_header(const struct bondage_profile *profile)
   printf("touch_policy: %s\n", profile->touch_policy);
   printf("target_kind: %s\n", profile->target_kind);
   printf("target: %s\n", profile->target);
+  bondage_print_owner("", "target", &profile->target_owner);
   if (profile->interpreter != NULL) {
     printf("interpreter: %s\n", profile->interpreter);
+    bondage_print_owner("", "interpreter", &profile->interpreter_owner);
   }
   if (profile->package_root != NULL) {
     printf("package_root: %s\n", profile->package_root);
+    bondage_print_owner("", "package_root", &profile->package_root_owner);
   }
 }
 
@@ -110,10 +141,12 @@ bondage_status(const char *config_path)
   printf("config: %s\n", config_path);
   printf("envchain: %s\n", config.global.envchain);
   printf("nono: %s\n", config.global.nono);
+  printf("defaults: %lu\n", (unsigned long)config.default_count);
   printf("profiles: %lu\n", (unsigned long)config.profile_count);
   for (i = 0; i < config.profile_count; i++) {
     const struct bondage_profile *profile = &config.profiles[i];
     printf("- %s\n", profile->name);
+    bondage_print_inherits(profile, "  ");
     printf("  use_envchain: %s\n", profile->use_envchain ? "true" : "false");
     if (profile->namespace_name != NULL) {
       printf("  namespace: %s\n", profile->namespace_name);
@@ -125,11 +158,14 @@ bondage_status(const char *config_path)
     printf("  touch_policy: %s\n", profile->touch_policy);
     printf("  target_kind: %s\n", profile->target_kind);
     printf("  target: %s\n", profile->target);
+    bondage_print_owner("  ", "target", &profile->target_owner);
     if (profile->interpreter != NULL) {
       printf("  interpreter: %s\n", profile->interpreter);
+      bondage_print_owner("  ", "interpreter", &profile->interpreter_owner);
     }
     if (profile->package_root != NULL) {
       printf("  package_root: %s\n", profile->package_root);
+      bondage_print_owner("  ", "package_root", &profile->package_root_owner);
     }
   }
 

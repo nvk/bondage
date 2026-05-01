@@ -8,41 +8,27 @@ touchid = /opt/homebrew/bin/touchid-check
 touchid_fp = sha256:replace-me
 tool_root = /Users/you/.bondage/tools
 
-[profile "claude"]
-use_envchain = false
-use_nono = true
-nono_profile = claude-code
-touch_policy = none
-target_kind = native
-target = /Users/you/.bondage/tools/claude/2.1.112/claude
-target_fp = sha256:replace-me
+[defaults "agent-nono"]
 nono_allow_cwd = true
 nono_allow_file = /dev/tty
 nono_allow_file = /dev/null
 nono_read_file = /dev/urandom
 
-[profile "codex"]
-use_envchain = false
-use_nono = true
-nono_profile = codex
-touch_policy = none
-target_kind = native
-target = /Users/you/.bondage/tools/codex/0.125.0/codex-aarch64-apple-darwin
-target_fp = sha256:replace-me
-nono_allow_cwd = true
-nono_allow_file = /dev/tty
-nono_allow_file = /dev/null
-nono_read_file = /dev/urandom
-env_set = GIT_TERMINAL_PROMPT=0
+[defaults "github-env"]
 env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
 env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
 
-[profile "opencode"]
-namespace = opencode
-use_envchain = true
-use_nono = true
-nono_profile = opencode
-touch_policy = prompt
+[defaults "claude-target"]
+target_kind = native
+target = /Users/you/.bondage/tools/claude/2.1.112/claude
+target_fp = sha256:replace-me
+
+[defaults "codex-target"]
+target_kind = native
+target = /Users/you/.bondage/tools/codex/0.128.0/codex-aarch64-apple-darwin
+target_fp = sha256:replace-me
+
+[defaults "opencode-script-target"]
 target_kind = script
 target = /Users/you/.bondage/tools/opencode/1.0.0/bin/opencode
 target_fp = sha256:replace-me
@@ -50,44 +36,60 @@ interpreter = /Users/you/.bondage/tools/runtimes/node/22.12.0/bin/node
 interpreter_fp = sha256:replace-me
 package_root = /Users/you/.bondage/tools/opencode/1.0.0
 package_tree_fp = sha256:replace-me
-nono_allow_cwd = true
-nono_allow_file = /dev/tty
-nono_allow_file = /dev/null
-nono_read_file = /dev/urandom
+
+[defaults "pi-script-target"]
+target_kind = script
+target = /Users/you/.bondage/tools/pi/1.2.3/dist/cli.js
+target_fp = sha256:replace-me
+interpreter = /Users/you/.bondage/tools/runtimes/node/22.12.0/bin/node
+interpreter_fp = sha256:replace-me
+package_root = /Users/you/.bondage/tools/pi/1.2.3
+package_tree_fp = sha256:replace-me
+
+[profile "claude"]
+inherits = agent-nono
+inherits = claude-target
+use_envchain = false
+use_nono = true
+nono_profile = claude-code
+touch_policy = none
+
+[profile "codex"]
+inherits = agent-nono
+inherits = github-env
+inherits = codex-target
+use_envchain = false
+use_nono = true
+nono_profile = codex
+touch_policy = none
+env_set = GIT_TERMINAL_PROMPT=0
+
+[profile "opencode"]
+inherits = agent-nono
+inherits = github-env
+inherits = opencode-script-target
+namespace = opencode
+use_envchain = true
+use_nono = true
+nono_profile = opencode
+touch_policy = prompt
 
 [profile "pi"]
+inherits = agent-nono
+inherits = github-env
+inherits = pi-script-target
 namespace = pi
 use_envchain = true
 use_nono = true
 nono_profile = pi
 touch_policy = prompt
-target_kind = script
-target = /Users/you/.bondage/tools/pi/1.2.3/dist/cli.js
-target_fp = sha256:replace-me
-interpreter = /Users/you/.bondage/tools/runtimes/node/22.12.0/bin/node
-interpreter_fp = sha256:replace-me
-package_root = /Users/you/.bondage/tools/pi/1.2.3
-package_tree_fp = sha256:replace-me
-nono_allow_cwd = true
-nono_allow_file = /dev/tty
-nono_allow_file = /dev/null
-nono_read_file = /dev/urandom
-env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
-env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
 ensure_dir = /Users/you/.pi
 
 [profile "pi-rawdog"]
+inherits = github-env
+inherits = pi-script-target
 namespace = pi
 use_envchain = true
 use_nono = false
 touch_policy = prompt
-target_kind = script
-target = /Users/you/.bondage/tools/pi/1.2.3/dist/cli.js
-target_fp = sha256:replace-me
-interpreter = /Users/you/.bondage/tools/runtimes/node/22.12.0/bin/node
-interpreter_fp = sha256:replace-me
-package_root = /Users/you/.bondage/tools/pi/1.2.3
-package_tree_fp = sha256:replace-me
-env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
-env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
 ensure_dir = /Users/you/.pi

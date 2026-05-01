@@ -34,12 +34,21 @@ Key rules:
   - `envchain <namespace> <target...>`
   - `<nono> wrap --profile <name> -- <target...>`
   - direct `<target...>`
+- config defaults must be explicit:
+  - `[defaults "name"]` defines reusable profile keys
+  - `inherits = name` opt-in applies defaults to a profile
+  - profile-local scalar keys override inherited values
+  - list keys append inherited values first, profile-local values second
+  - no implicit global inheritance, includes, wildcards, or shell expansion
+- `repin` and `doctor` must report the owning section for inherited pins
 
 Implemented now:
 
 - direct file hashing
 - package tree hashing
 - config rewrite + `repin` for versioned tool moves
+- named config defaults with explicit profile inheritance
+- ownership-aware `repin`/`doctor` for inherited target, interpreter, and package pins
 - non-mutating `doctor` drift detection
 - `repin-globals` for shared helper maintenance
 - exact argv construction

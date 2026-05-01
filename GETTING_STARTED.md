@@ -117,10 +117,15 @@ Important:
 - fill in real fingerprints
 - point `nono_profile_root` at your local profile directory
 - point `tool_root` at your own immutable tool tree
+- keep shared launch fragments in named defaults when they really are shared
 - remove any profile you do not actually use
 - replace the sample `nono` profile names if your local setup uses different names
 
 The sample config is not meant to be copied unchanged.
+
+Defaults are explicit, not ambient. A profile only consumes a defaults block
+when it declares `inherits = name`. Use narrow names like `agent-nono`,
+`codex-target`, or `pi-script-target`; avoid one giant catch-all defaults block.
 
 ## Upgrade Loop
 
@@ -139,7 +144,8 @@ Use the commands narrowly:
 - `repin-globals` only refreshes shared helpers like `nono`, `envchain`, and
   `touchid-check`
 - `repin <profile>` refreshes the selected tool family and any matching sibling
-  profiles that share the same pinned target, interpreter, or package root
+  profiles that share the same pinned target, interpreter, or package root; if
+  the pin came from a defaults block, `repin` rewrites that defaults block
 - `verify` still fails closed, but when it recognizes a moved Homebrew version
   it now tells you which `repin` command to run
 
@@ -190,9 +196,11 @@ bondage repin codex ~/.config/bondage/bondage.conf
 bondage repin pi ~/.config/bondage/bondage.conf
 ```
 
-`repin` rewrites the matching profile family in place, refreshes the hashes,
+`repin` rewrites the owning section in place, refreshes the hashes,
 canonicalizes symlinked helper paths like Homebrew shims, follows moved
-`Cellar/` or `Caskroom/` versions, and then re-verifies the result.
+`Cellar/` or `Caskroom/` versions, and then re-verifies the result. For
+inherited pins, the owning section may be `[defaults "..."]` instead of the
+selected `[profile "..."]`.
 
 ## Verify Before Exec
 

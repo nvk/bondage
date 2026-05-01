@@ -146,10 +146,51 @@ Important:
 
 - paths in the sample config are literal absolute paths
 - `bondage` does not expand shell variables inside the config
+- named `[defaults "..."]` blocks are opt-in; a profile only consumes them when
+  it declares `inherits = ...`
 - `bondage` itself now prefers the standard config location
   `~/.config/bondage/bondage.conf` when no explicit config is provided
 - the sample config is a pattern to adapt, not a file to use unchanged
 - the `examples/nono/` profiles are starter patterns, not a complete local tier matrix
+
+## Config defaults
+
+Use named defaults to remove repeated launch-policy fragments without moving
+policy back into shell wrappers:
+
+```ini
+[defaults "agent-nono"]
+nono_allow_cwd = true
+nono_allow_file = /dev/tty
+nono_read_file = /dev/urandom
+
+[defaults "codex-target"]
+target_kind = native
+target = /Users/you/.bondage/tools/codex/0.128.0/codex-aarch64-apple-darwin
+target_fp = sha256:replace-me
+
+[profile "codex"]
+inherits = agent-nono,codex-target
+use_envchain = false
+use_nono = true
+nono_profile = codex
+touch_policy = none
+```
+
+Rules:
+
+- inheritance is explicit and profile-local
+- defaults are applied in order, then profile-local keys override them
+- list keys append in order, so inherited `nono_allow_file` entries come before
+  profile-local entries
+- old configs without defaults still work
+- invalid combinations fail closed, for example inheriting `nono_*` settings
+  while setting `use_nono = false`
+
+`status`, `verify`, `doctor`, and `repin` report where inherited pin fields
+come from. If `repin codex` refreshes `defaults "codex-target"`, every profile
+that inherits that defaults block gets the new pin. That blast radius is the
+point, but it should be visible in the command output.
 
 ## Upgrade discipline
 
@@ -176,9 +217,9 @@ symlinked tool paths, and follows Homebrew version moves under `Cellar/` and
 In practice:
 
 - `bondage repin codex ...` updates every Codex-tier profile sharing the same
-  pinned target
+  pinned target, or the shared defaults block if the target is inherited
 - `bondage repin opencode ...` can also refresh the pinned interpreter and
-  package tree for script-based tools
+  package tree for script-based tools, including inherited script defaults
 - global helpers like `nono`, `envchain`, and `touchid-check` are repinned too
   when that profile type depends on them
 
@@ -213,6 +254,7 @@ Implemented now:
 - exact-path checks via `realpath()`
 - fd-based SHA-256 hashing for direct artifacts
 - deterministic package-tree hashing for script profiles
+- named defaults and explicit profile inheritance for repeated launch policy
 - optional `envchain` per profile
 - optional `nono` per profile, including rawdog/no-`nono` launches
 - profile-driven `nono` flags like `--allow-cwd`, `--allow-file`, and `--read-file`
