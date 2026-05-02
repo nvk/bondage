@@ -68,7 +68,9 @@ Public lessons worth keeping:
 - treat package-manager upgrades as launch-policy events: repin, verify, then
   promote
 - keep a named repair tier for fixing the launcher stack itself
-- treat helper scripts and denial hooks as testable code, not disposable glue
+- treat helper scripts as testable code, not disposable glue
+- treat agent-visible hook output as prompt surface: keep it factual and short,
+  and do not inject profile-repair workflows into the transcript
 
 In practice that means:
 
@@ -84,6 +86,11 @@ stable home bootstrap stub
 The point is not ceremony. It is to avoid a situation where one unreadable
 startup file or one stale package-manager path silently drops you onto the raw
 binary you were trying not to trust.
+
+Sandbox denials should be fixed in managed profiles and launcher config. Hooks
+may be useful as deterministic guards, but they should not tell an agent to
+offer choices, wait, stop, or create new profile policy from inside the model
+transcript.
 
 ## Build
 
