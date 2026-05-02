@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,10 @@
 
 #include "launch.h"
 #include "verify.h"
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 extern char **environ;
 
@@ -600,6 +605,8 @@ bondage_build_argv(const struct bondage_config *config,
   const char *runner;
   const char *target0 = NULL;
   char *nono_profile_arg = NULL;
+  char cwd_buf[PATH_MAX];
+  const char *nono_workdir = NULL;
 
   memset(out, 0, sizeof(*out));
 
@@ -620,7 +627,18 @@ bondage_build_argv(const struct bondage_config *config,
   if (profile->use_envchain) fixed_argc += 2;
   if (profile->use_nono) {
     fixed_argc += 5;
-    if (profile->nono_allow_cwd) fixed_argc += 1;
+    if (profile->nono_allow_cwd) {
+      if (getcwd(cwd_buf, sizeof(cwd_buf)) == NULL) {
+        bondage_set_error(errbuf, errbufsz,
+                          "cannot determine current working directory: %s",
+                          strerror(errno));
+        return 0;
+      }
+      nono_workdir = cwd_buf;
+      fixed_argc += 3;
+    }
+    fixed_argc += profile->nono_allow_dirs.count * 2;
+    fixed_argc += profile->nono_read_dirs.count * 2;
     fixed_argc += profile->nono_allow_files.count * 2;
     fixed_argc += profile->nono_read_files.count * 2;
   }
@@ -652,7 +670,17 @@ bondage_build_argv(const struct bondage_config *config,
     argv[cursor++] = nono_profile_arg;
     nono_profile_arg = NULL;
     if (profile->nono_allow_cwd) {
+      argv[cursor++] = bondage_xstrdup("--workdir");
+      argv[cursor++] = bondage_xstrdup(nono_workdir);
       argv[cursor++] = bondage_xstrdup("--allow-cwd");
+    }
+    for (i = 0; i < profile->nono_allow_dirs.count; i++) {
+      argv[cursor++] = bondage_xstrdup("--allow");
+      argv[cursor++] = bondage_xstrdup(profile->nono_allow_dirs.items[i]);
+    }
+    for (i = 0; i < profile->nono_read_dirs.count; i++) {
+      argv[cursor++] = bondage_xstrdup("--read");
+      argv[cursor++] = bondage_xstrdup(profile->nono_read_dirs.items[i]);
     }
     for (i = 0; i < profile->nono_allow_files.count; i++) {
       argv[cursor++] = bondage_xstrdup("--allow-file");

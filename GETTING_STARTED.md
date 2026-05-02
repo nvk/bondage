@@ -117,6 +117,7 @@ Important:
 - fill in real fingerprints
 - point `nono_profile_root` at your local profile directory
 - point `tool_root` at your own immutable tool tree
+- put shared recursive workspace grants in `nono_allow_dir` or `nono_read_dir`
 - keep shared launch fragments in named defaults when they really are shared
 - remove any profile you do not actually use
 - replace the sample `nono` profile names if your local setup uses different names

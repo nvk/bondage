@@ -134,6 +134,10 @@ bondage_print_profile_header(const struct bondage_profile *profile)
     printf("package_root: %s\n", profile->package_root);
     bondage_print_owner("", "package_root", &profile->package_root_owner);
   }
+  bondage_print_string_list("", "nono_allow_dir", &profile->nono_allow_dirs);
+  bondage_print_string_list("", "nono_read_dir", &profile->nono_read_dirs);
+  bondage_print_string_list("", "nono_allow_file", &profile->nono_allow_files);
+  bondage_print_string_list("", "nono_read_file", &profile->nono_read_files);
   bondage_print_string_list("", "target_arg", &profile->target_args);
 }
 
@@ -180,6 +184,10 @@ bondage_status(const char *config_path)
       printf("  package_root: %s\n", profile->package_root);
       bondage_print_owner("  ", "package_root", &profile->package_root_owner);
     }
+    bondage_print_string_list("  ", "nono_allow_dir", &profile->nono_allow_dirs);
+    bondage_print_string_list("  ", "nono_read_dir", &profile->nono_read_dirs);
+    bondage_print_string_list("  ", "nono_allow_file", &profile->nono_allow_files);
+    bondage_print_string_list("  ", "nono_read_file", &profile->nono_read_files);
     bondage_print_string_list("  ", "target_arg", &profile->target_args);
   }
 
