@@ -63,7 +63,20 @@ nono_allow_file = /dev/null
 target_arg = --test-profile-local
 EOF
 
-./bondage verify codex "$conf" >/dev/null
+verify_out="$(./bondage verify codex "$conf")"
+grep -F "nono_allow_dir: $root" <<<"$verify_out" >/dev/null
+grep -F "nono_read_dir: /tmp" <<<"$verify_out" >/dev/null
+grep -F "nono_allow_file: /dev/tty" <<<"$verify_out" >/dev/null
+grep -F "nono_allow_file: /dev/null" <<<"$verify_out" >/dev/null
+grep -F "nono_read_file: /dev/urandom" <<<"$verify_out" >/dev/null
+
+status_out="$(./bondage status "$conf")"
+grep -F "  nono_allow_dir: $root" <<<"$status_out" >/dev/null
+grep -F "  nono_read_dir: /tmp" <<<"$status_out" >/dev/null
+grep -F "  nono_allow_file: /dev/tty" <<<"$status_out" >/dev/null
+grep -F "  nono_allow_file: /dev/null" <<<"$status_out" >/dev/null
+grep -F "  nono_read_file: /dev/urandom" <<<"$status_out" >/dev/null
+
 argv="$(./bondage argv codex "$conf" -- ping)"
 
 grep -F 'argv[4] = --workdir' <<<"$argv" >/dev/null
