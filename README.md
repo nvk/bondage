@@ -128,8 +128,9 @@ artifacts, and thin shell wrappers remain your responsibility.
 ./bondage verify <profile> [config]
 ./bondage repin <profile> [config]
 ./bondage repin-globals [config]
-./bondage argv <profile> [config] [-- args...]
+./bondage chain <profile> [config] [-- args...]
 ./bondage exec <profile> [config] [-- args...]
+./bondage argv <profile> [config] [-- args...]  # compatibility alias for chain
 ./bondage hash-file <absolute-path>
 ./bondage hash-tree <absolute-path>
 ```
@@ -138,13 +139,17 @@ If `config` is omitted, `bondage` resolves it in this order:
 
 1. explicit CLI config argument
 2. `BONDAGE_CONF`
-3. `~/.config/bondage/bondage.conf`
-4. `./bondage.conf`
+3. `~/.config/bondage/bondage.conf`, when it exists
+4. `./.bondage.conf`, when it exists
+5. `./bondage.conf`
 
 An example config lives at [`bondage.conf.example`](bondage.conf.example).
 It is intentionally a small schema/sample file, not the full local profile matrix.
-The local `./bondage.conf` in this checkout is gitignored and can pin directly to
-the live agent artifacts on this machine.
+The local `./bondage.conf` in this checkout is gitignored and can pin directly
+to the live agent artifacts on this machine. A committed `./.bondage.conf` is
+also supported for repo-local setups, but keep the safety model straight:
+host-specific paths, fingerprints, and secret namespaces still belong in local
+policy unless they are genuinely valid for every checkout.
 
 Minimal starter `nono` profiles live in [`examples/nono/`](examples/nono/).
 Those are the sandbox-side companions to the sample launcher config.
@@ -157,6 +162,8 @@ Important:
   it declares `inherits = ...`
 - `bondage` itself now prefers the standard config location
   `~/.config/bondage/bondage.conf` when no explicit config is provided
+- a repo-local `./.bondage.conf` is a fallback, not a silent override of your
+  user config
 - the sample config is a pattern to adapt, not a file to use unchanged
 - the `examples/nono/` profiles are starter patterns, not a complete local tier matrix
 
@@ -220,7 +227,7 @@ rawdog/no-`nono` profile unless that is the explicit purpose of the profile.
 
 `status`, `verify`, `doctor`, and `repin` report where inherited pin fields
 come from. If `repin codex` refreshes `defaults "codex-target"`, every profile
-that inherits that defaults block gets the new pin. That blast radius is the
+that inherits that defaults block gets the new pin. The shared ownership is the
 point, but it should be visible in the command output.
 
 ## Upgrade discipline
@@ -237,7 +244,7 @@ bondage repin codex ~/.config/bondage/bondage.conf
 bondage repin claude ~/.config/bondage/bondage.conf
 bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify claude ~/.config/bondage/bondage.conf
-bondage argv codex ~/.config/bondage/bondage.conf -- --help
+bondage chain codex ~/.config/bondage/bondage.conf -- --help
 ```
 
 `repin` is the command that removes the dumb manual step. It rewrites the
@@ -278,7 +285,8 @@ Implemented now:
 - `verify`
 - `repin`
 - `repin-globals`
-- `argv`
+- `chain`
+- `argv` compatibility alias
 - `exec`
 - `hash-file`
 - `hash-tree`
@@ -300,6 +308,8 @@ Implemented now:
   - `envchain -> target`
   - `nono wrap --profile <name> -- target`
   - direct target exec
+- compact launch-chain summary before `exec`; set `BONDAGE_QUIET=1` or
+  `BONDAGE_LAUNCH_SUMMARY=0` to suppress it for scripts
 - end-to-end fake execution for:
   - native target
   - script target + pinned interpreter + package tree

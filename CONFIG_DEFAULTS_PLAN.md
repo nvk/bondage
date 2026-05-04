@@ -205,8 +205,8 @@ bondage verify opencode ~/.config/bondage/bondage.conf
 bondage verify pi ~/.config/bondage/bondage.conf
 ```
 
-For representative profiles, compare `bondage argv` before and after migration.
-The argv should be byte-for-byte identical except for intentional config
+For representative profiles, compare `bondage chain` before and after migration.
+The launch chain should be byte-for-byte identical except for intentional config
 deduplication.
 
 ## Rollback Plan

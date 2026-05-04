@@ -1,7 +1,9 @@
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "launch.h"
@@ -22,8 +24,17 @@ bondage_default_config_path(void)
   if (home != NULL && home[0] != '\0') {
     n = snprintf(home_path, sizeof(home_path),
                  "%s/.config/bondage/bondage.conf", home);
-    if (n > 0 && (size_t)n < sizeof(home_path)) return home_path;
+    if (n > 0 && (size_t)n < sizeof(home_path)) {
+      if (access(home_path, F_OK) == 0) return home_path;
+      if (errno != ENOENT && errno != ENOTDIR) return home_path;
+    }
   }
+
+  if (access("./.bondage.conf", F_OK) == 0) return "./.bondage.conf";
+  if (errno != ENOENT && errno != ENOTDIR) return "./.bondage.conf";
+
+  if (access("./bondage.conf", F_OK) == 0) return "./bondage.conf";
+  if (errno != ENOENT && errno != ENOTDIR) return "./bondage.conf";
 
   return "./bondage.conf";
 }
@@ -38,12 +49,49 @@ bondage_usage(const char *progname)
           "  %s verify <profile> [config]\n"
           "  %s repin <profile> [config]\n"
           "  %s repin-globals [config]\n"
-          "  %s argv <profile> [config] [-- args...]\n"
+          "  %s chain <profile> [config] [-- args...]\n"
           "  %s exec <profile> [config] [-- args...]\n"
+          "  %s argv <profile> [config] [-- args...]  (alias for chain)\n"
           "  %s hash-file <absolute-path>\n"
           "  %s hash-tree <absolute-path>\n",
           progname, progname, progname, progname, progname, progname, progname,
-          progname, progname);
+          progname, progname, progname);
+}
+
+static int
+bondage_env_is_disabled(const char *value)
+{
+  if (value == NULL) return 0;
+  if (strcmp(value, "0") == 0) return 1;
+  if (strcmp(value, "false") == 0) return 1;
+  if (strcmp(value, "no") == 0) return 1;
+  if (strcmp(value, "off") == 0) return 1;
+  return 0;
+}
+
+static int
+bondage_env_is_enabled(const char *value)
+{
+  if (value == NULL) return 0;
+  if (strcmp(value, "1") == 0) return 1;
+  if (strcmp(value, "true") == 0) return 1;
+  if (strcmp(value, "yes") == 0) return 1;
+  if (strcmp(value, "on") == 0) return 1;
+  return 0;
+}
+
+static int
+bondage_launch_summary_enabled(void)
+{
+  if (bondage_env_is_enabled(getenv("BONDAGE_QUIET"))) return 0;
+  if (bondage_env_is_disabled(getenv("BONDAGE_LAUNCH_SUMMARY"))) return 0;
+  return 1;
+}
+
+static const char *
+bondage_bool_word(int value)
+{
+  return value ? "yes" : "no";
 }
 
 static int
@@ -139,6 +187,44 @@ bondage_print_profile_header(const struct bondage_profile *profile)
   bondage_print_string_list("", "nono_allow_file", &profile->nono_allow_files);
   bondage_print_string_list("", "nono_read_file", &profile->nono_read_files);
   bondage_print_string_list("", "target_arg", &profile->target_args);
+}
+
+static void
+bondage_print_launch_summary(const struct bondage_config *config,
+                             const struct bondage_profile *profile,
+                             const char *config_path,
+                             FILE *stream)
+{
+  (void)config;
+
+  fprintf(stream, "bondage: launch chain\n");
+  fprintf(stream, "  profile: %s\n", profile->name);
+  fprintf(stream, "  config: %s\n", config_path);
+
+  if (profile->use_envchain) {
+    fprintf(stream, "  envchain: namespace %s\n", profile->namespace_name);
+  }
+  else {
+    fprintf(stream, "  envchain: off\n");
+  }
+
+  if (profile->use_nono) {
+    fprintf(stream,
+            "  nono: profile %s allow_cwd=%s grants=%lu allow_dir, %lu read_dir, %lu allow_file, %lu read_file\n",
+            profile->nono_profile != NULL ? profile->nono_profile : "(none)",
+            bondage_bool_word(profile->nono_allow_cwd),
+            (unsigned long)profile->nono_allow_dirs.count,
+            (unsigned long)profile->nono_read_dirs.count,
+            (unsigned long)profile->nono_allow_files.count,
+            (unsigned long)profile->nono_read_files.count);
+  }
+  else {
+    fprintf(stream, "  nono: off\n");
+  }
+
+  fprintf(stream, "  touch: %s\n", profile->touch_policy);
+  fprintf(stream, "  target: %s %s (verified)\n",
+          profile->target_kind, profile->target);
 }
 
 static int
@@ -263,6 +349,10 @@ bondage_argv_or_exec(const char *profile_name, const char *config_path,
     return 0;
   }
 
+  if (bondage_launch_summary_enabled()) {
+    bondage_print_launch_summary(&config, profile, config_path, stderr);
+  }
+
   if (!bondage_prepare_exec(&config, profile, &args, errbuf, sizeof(errbuf))) {
     fprintf(stderr, "bondage: %s\n", errbuf);
     bondage_argv_free(&args);
@@ -318,7 +408,8 @@ bondage_main(int argc, char **argv)
     return 2;
   }
 
-  if ((strcmp(argv[1], "argv") == 0 || strcmp(argv[1], "exec") == 0) &&
+  if ((strcmp(argv[1], "chain") == 0 || strcmp(argv[1], "argv") == 0 ||
+       strcmp(argv[1], "exec") == 0) &&
       argc >= 3) {
     do_exec = strcmp(argv[1], "exec") == 0 ? 1 : 0;
     if (argc >= 4 && strcmp(argv[3], "--") != 0) {

@@ -50,6 +50,7 @@ It should not decide:
 - optional Touch ID gate
 - exact environment construction
 - exact argv construction
+- human-readable launch-chain inspection
 - direct artifact verification
 - interpreter verification for script targets
 - package-tree verification for JS tools
@@ -133,6 +134,12 @@ The current local configuration uses:
 
 The local shell has already been reduced to convenience-only wrappers. The launcher
 and trust decisions now live in `bondage.conf`, not in `shell.zsh`.
+
+`~/.config/bondage/bondage.conf` remains the preferred user-level source of
+truth. A repo-local `./.bondage.conf` can describe project policy, but it is a
+fallback rather than a silent override of user policy. Do not commit local-only
+absolute paths, fingerprints, or secret namespaces unless they are truly part of
+the project artifact set.
 
 ## Operational Rule
 

@@ -78,6 +78,13 @@ grep -F "  nono_allow_file: /dev/null" <<<"$status_out" >/dev/null
 grep -F "  nono_read_file: /dev/urandom" <<<"$status_out" >/dev/null
 
 argv="$(./bondage argv codex "$conf" -- ping)"
+chain="$(./bondage chain codex "$conf" -- ping)"
+
+if [ "$chain" != "$argv" ]; then
+  echo "expected chain output to match argv compatibility alias" >&2
+  diff -u <(printf '%s\n' "$argv") <(printf '%s\n' "$chain") >&2 || true
+  exit 1
+fi
 
 grep -F 'argv[4] = --workdir' <<<"$argv" >/dev/null
 grep -F "argv[5] = $root" <<<"$argv" >/dev/null
@@ -97,6 +104,44 @@ grep -F 'argv[19] = --sandbox' <<<"$argv" >/dev/null
 grep -F 'argv[20] = danger-full-access' <<<"$argv" >/dev/null
 grep -F 'argv[21] = --test-profile-local' <<<"$argv" >/dev/null
 grep -F 'argv[22] = ping' <<<"$argv" >/dev/null
+
+discovery_dir="$tmpdir/discovery"
+mkdir -p "$discovery_dir/home"
+cp "$conf" "$discovery_dir/.bondage.conf"
+discovery_out="$(cd "$discovery_dir" && HOME="$discovery_dir/home" "$root/bondage" chain codex -- ping)"
+grep -F "argv[0] = $root/fixtures/fake-nono" <<<"$discovery_out" >/dev/null
+grep -F 'argv[22] = ping' <<<"$discovery_out" >/dev/null
+
+exec_conf="$tmpdir/exec.conf"
+cat >"$exec_conf" <<EOF
+[global]
+nono = $root/fixtures/fake-nono
+nono_fp = $nono_fp
+
+[profile "direct"]
+use_envchain = false
+use_nono = false
+touch_policy = none
+target_kind = native
+target = $root/fixtures/fake-codex
+target_fp = $codex_fp
+EOF
+
+BONDAGE_CONF="$exec_conf" ./bondage exec direct -- smoke >"$tmpdir/exec.out" 2>"$tmpdir/exec.err"
+grep -F 'fake codex args=smoke' "$tmpdir/exec.out" >/dev/null
+grep -F 'bondage: launch chain' "$tmpdir/exec.err" >/dev/null
+grep -F '  profile: direct' "$tmpdir/exec.err" >/dev/null
+grep -F '  envchain: off' "$tmpdir/exec.err" >/dev/null
+grep -F '  nono: off' "$tmpdir/exec.err" >/dev/null
+grep -F "  target: native $root/fixtures/fake-codex (verified)" "$tmpdir/exec.err" >/dev/null
+
+BONDAGE_QUIET=1 BONDAGE_CONF="$exec_conf" ./bondage exec direct -- quiet >"$tmpdir/quiet.out" 2>"$tmpdir/quiet.err"
+grep -F 'fake codex args=quiet' "$tmpdir/quiet.out" >/dev/null
+if [ -s "$tmpdir/quiet.err" ]; then
+  echo "expected BONDAGE_QUIET=1 to suppress launch summary" >&2
+  cat "$tmpdir/quiet.err" >&2
+  exit 1
+fi
 
 unknown="$tmpdir/unknown.conf"
 cat >"$unknown" <<EOF

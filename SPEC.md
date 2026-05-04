@@ -8,6 +8,7 @@ Canonical local design summary:
 - open first, verify, then execute
 - fail closed
 - shell aliases are convenience only
+- inspectable launch chain before execution
 
 Target execution chain:
 
@@ -43,6 +44,12 @@ Key rules:
   - list keys append inherited values first, profile-local values second
   - no implicit global inheritance, includes, wildcards, or shell expansion
 - `repin` and `doctor` must report the owning section for inherited pins
+- `chain` is the public launch-chain inspection command; `argv` remains a
+  compatibility alias
+- `exec` must print a compact prelaunch summary unless explicitly suppressed
+- config discovery must prefer explicit/user policy before repo-local fallback:
+  explicit path, `BONDAGE_CONF`, user config, `./.bondage.conf`, then
+  `./bondage.conf`
 
 Implemented now:
 
@@ -53,6 +60,10 @@ Implemented now:
 - ownership-aware `repin`/`doctor` for inherited target, interpreter, and package pins
 - non-mutating `doctor` drift detection
 - `repin-globals` for shared helper maintenance
+- `chain` command with `argv` compatibility alias
+- repo-local `./.bondage.conf` fallback
+- compact `exec` launch summary with `BONDAGE_QUIET=1` /
+  `BONDAGE_LAUNCH_SUMMARY=0` suppression
 - exact argv construction
 - optional `envchain`
 - optional `nono`
@@ -66,5 +77,4 @@ Implemented now:
 
 Still intentionally deferred:
 
-- thin-wrapper cutover
 - bundle promotion pipeline

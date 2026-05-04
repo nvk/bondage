@@ -23,6 +23,8 @@ but too dangerous to run loose with:
 `bondage` does not solve acquisition-time trust. It does not make a bad npm
 tree good. What it does do is force the launch boundary to become explicit:
 exact artifact set, optional secret release, optional sandbox, exact argv.
+The public inspection command is `bondage chain`; the older `bondage argv`
+name still works as a compatibility alias.
 
 This setup also leans on the OS where it makes sense. On macOS, that means
 using Keychain as the real secret store and using OS-level signing identity
@@ -106,6 +108,13 @@ mkdir -p ~/.config/bondage
 
 Then create `~/.config/bondage/bondage.conf` from the example in this
 repository and edit it so it matches your machine.
+
+`bondage` also supports a repo-local `./.bondage.conf` fallback. The user-level
+config wins when it exists, so a random checkout does not silently replace your
+normal launch policy. Use `./.bondage.conf` for project policy only when the
+paths and fingerprints are actually portable for that checkout; otherwise keep
+machine-specific pins in `~/.config/bondage/bondage.conf` or an explicit local
+config path.
 
 For the sandbox side, start from the matching JSON examples in
 [`examples/nono/`](examples/nono/), then copy and rename only the profiles you
@@ -212,11 +221,11 @@ bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify pi ~/.config/bondage/bondage.conf
 ```
 
-Then inspect the exact argv:
+Then inspect the launch chain:
 
 ```sh
-bondage argv codex ~/.config/bondage/bondage.conf -- --help
-bondage argv pi ~/.config/bondage/bondage.conf -- --help
+bondage chain codex ~/.config/bondage/bondage.conf -- --help
+bondage chain pi ~/.config/bondage/bondage.conf -- --help
 ```
 
 If a tool needs stable startup flags, put them in `bondage.conf` with
@@ -242,6 +251,11 @@ Only after that should you use:
 ```sh
 bondage exec codex ~/.config/bondage/bondage.conf -- --help
 ```
+
+`exec` prints a compact launch summary before replacing itself with the target:
+profile name, config path, envchain namespace, nono profile/grant counts, Touch
+ID policy, and verified target. It does not print secret values. For scripts,
+set `BONDAGE_QUIET=1` or `BONDAGE_LAUNCH_SUMMARY=0` to suppress that summary.
 
 For ongoing maintenance, the upgrade loop should now be:
 
@@ -346,7 +360,7 @@ Minimum post-upgrade checks:
 ```sh
 bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify claude ~/.config/bondage/bondage.conf
-bondage argv codex ~/.config/bondage/bondage.conf -- --help
+bondage chain codex ~/.config/bondage/bondage.conf -- --help
 ```
 
 Then open a fresh login shell and confirm your wrapper names still resolve to
