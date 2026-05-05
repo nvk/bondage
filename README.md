@@ -235,17 +235,19 @@ point, but it should be visible in the command output.
 Treat upgrades to `bondage`, `nono`, agent binaries, interpreters, or package
 trees as explicit change events.
 
-Minimum checklist:
+Minimum troubleshooting loop:
 
 ```sh
 bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf
-bondage repin codex ~/.config/bondage/bondage.conf
-bondage repin claude ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it
+bondage repin codex ~/.config/bondage/bondage.conf     # if doctor suggests it
+bondage repin claude ~/.config/bondage/bondage.conf    # if doctor suggests it
 bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify claude ~/.config/bondage/bondage.conf
 bondage chain codex ~/.config/bondage/bondage.conf -- --help
 ```
+
+Use `bondage doctor --help` to print this loop at the terminal.
 
 `repin` is the command that removes the dumb manual step. It rewrites the
 selected profile family in place, refreshes fingerprints, canonicalizes live

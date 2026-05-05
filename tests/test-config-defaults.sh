@@ -12,6 +12,11 @@ root="$(pwd)"
 nono_fp="$(./bondage hash-file "$root/fixtures/fake-nono")"
 codex_fp="$(./bondage hash-file "$root/fixtures/fake-codex")"
 
+doctor_help="$(./bondage doctor --help 2>&1)"
+grep -F "Upgrade troubleshooting loop:" <<<"$doctor_help" >/dev/null
+grep -F "repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it" <<<"$doctor_help" >/dev/null
+grep -F "chain <profile> ~/.config/bondage/bondage.conf -- --help" <<<"$doctor_help" >/dev/null
+
 old_conf="$tmpdir/old.conf"
 cat >"$old_conf" <<EOF
 [global]

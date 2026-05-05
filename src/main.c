@@ -58,6 +58,28 @@ bondage_usage(const char *progname)
           progname, progname, progname);
 }
 
+static void
+bondage_doctor_usage(const char *progname)
+{
+  fprintf(stderr,
+          "Usage:\n"
+          "  %s doctor [config]\n\n"
+          "Checks the whole launch config without changing it. Use this after\n"
+          "package-manager upgrades to find stale helper pins, moved tool paths,\n"
+          "or hash drift.\n\n"
+          "Upgrade troubleshooting loop:\n"
+          "  %s doctor ~/.config/bondage/bondage.conf\n"
+          "  %s repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it\n"
+          "  %s repin <profile> ~/.config/bondage/bondage.conf # if doctor suggests it\n"
+          "  %s verify <profile> ~/.config/bondage/bondage.conf\n"
+          "  %s chain <profile> ~/.config/bondage/bondage.conf -- --help\n\n"
+          "Notes:\n"
+          "  - repin-globals refreshes shared helpers such as nono, envchain, and touchid-check.\n"
+          "  - repin <profile> refreshes only the selected tool family or its owning defaults block.\n"
+          "  - doctor prints exact suggest: commands when it detects repairable drift.\n",
+          progname, progname, progname, progname, progname, progname);
+}
+
 static int
 bondage_env_is_disabled(const char *value)
 {
@@ -434,6 +456,11 @@ bondage_main(int argc, char **argv)
   }
 
   if (strcmp(argv[1], "doctor") == 0) {
+    if (argc >= 3 &&
+        (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+      bondage_doctor_usage(argv[0]);
+      return 0;
+    }
     if (argc >= 3) config_path = argv[2];
     return bondage_doctor(config_path);
   }

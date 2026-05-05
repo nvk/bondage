@@ -358,10 +358,17 @@ Treat package-manager upgrades as launcher changes, not just tool updates.
 Minimum post-upgrade checks:
 
 ```sh
+bondage doctor ~/.config/bondage/bondage.conf
+bondage repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it
+bondage repin codex ~/.config/bondage/bondage.conf     # if doctor suggests it
 bondage verify codex ~/.config/bondage/bondage.conf
 bondage verify claude ~/.config/bondage/bondage.conf
 bondage chain codex ~/.config/bondage/bondage.conf -- --help
 ```
+
+You can also run `bondage doctor --help` for the terminal version of this
+upgrade troubleshooting loop. `doctor` is non-mutating; it prints exact
+`suggest:` commands when it finds stale global helpers or profile pins.
 
 Then open a fresh login shell and confirm your wrapper names still resolve to
 the expected shell functions.
