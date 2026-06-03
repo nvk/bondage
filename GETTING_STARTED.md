@@ -49,6 +49,12 @@ brew install nvk/tap/agent-bondage
 
 That installs the `bondage` executable.
 
+If you use an interactive Touch ID launch gate, install the helper too:
+
+```sh
+brew install nvk/tap/touchid-check
+```
+
 Install `nono` and any other local dependencies using your own preferred path.
 
 ## Recommended Layout
@@ -142,10 +148,12 @@ when it declares `inherits = name`. Use narrow names like `agent-nono`,
 The maintenance path should now be:
 
 ```sh
-bondage --config ~/.config/bondage/bondage.conf doctor
-bondage --config ~/.config/bondage/bondage.conf repin-globals
-bondage --config ~/.config/bondage/bondage.conf repin codex
-bondage --config ~/.config/bondage/bondage.conf verify codex
+export BONDAGE_CONF="${BONDAGE_CONF:-$HOME/.config/bondage/bondage.conf}"
+
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" repin codex
+bondage --config "$BONDAGE_CONF" verify codex
 ```
 
 Use the commands narrowly:
@@ -158,6 +166,26 @@ Use the commands narrowly:
   the pin came from a defaults block, `repin` rewrites that defaults block
 - `verify` still fails closed, but when it recognizes a moved Homebrew version
   it now tells you which `repin` command to run
+
+If Homebrew leaves an old `nono` keg installed, a config pinned to that old
+version can still look valid. After upgrading `nono`, clean up the old keg
+before repinning globals:
+
+```sh
+brew upgrade nono
+brew cleanup nono
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" status | grep 'nono: '
+```
+
+For registry-managed `nono` profile packs, update packs only after the `nono`
+binary itself is upgraded. Older `nono` releases may reject newer profile
+schemas.
+
+```sh
+nono list --installed
+nono profile show "${NONO_PROFILE:-codex}" >/dev/null
+```
 
 ## Machine-Specific vs Reusable
 
@@ -200,10 +228,10 @@ After an upgrade, do not hand-edit versioned paths and hashes unless you are
 recovering from something more broken than usual. Use:
 
 ```sh
-bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf
-bondage repin codex ~/.config/bondage/bondage.conf
-bondage repin pi ~/.config/bondage/bondage.conf
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" repin codex
+bondage --config "$BONDAGE_CONF" repin pi
 ```
 
 `repin` rewrites the owning section in place, refreshes the hashes,
@@ -260,10 +288,10 @@ set `BONDAGE_QUIET=1` or `BONDAGE_LAUNCH_SUMMARY=0` to suppress that summary.
 For ongoing maintenance, the upgrade loop should now be:
 
 ```sh
-bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf
-bondage repin codex ~/.config/bondage/bondage.conf
-bondage verify codex ~/.config/bondage/bondage.conf
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" repin codex
+bondage --config "$BONDAGE_CONF" verify codex
 ```
 
 Only fall back to manual config edits if `repin` cannot infer the new path.
@@ -335,6 +363,16 @@ Do not confuse that with a looser-but-still-sandboxed profile.
 
 Use Touch ID only where you actually want an interactive local approval gate.
 
+On macOS, install the helper with:
+
+```sh
+brew install nvk/tap/touchid-check
+```
+
+Then pin it in `[global]` with the exact path and hash reported by
+`bondage hash-file /opt/homebrew/bin/touchid-check`. The sample config uses
+`touchid = /opt/homebrew/bin/touchid-check` and `touchid_fp = sha256:replace-me`.
+
 If a profile does not need it, keep:
 
 - `touch_policy = none`
@@ -358,12 +396,13 @@ Treat package-manager upgrades as launcher changes, not just tool updates.
 Minimum post-upgrade checks:
 
 ```sh
-bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it
-bondage repin codex ~/.config/bondage/bondage.conf     # if doctor suggests it
-bondage verify codex ~/.config/bondage/bondage.conf
-bondage verify claude ~/.config/bondage/bondage.conf
-bondage chain codex ~/.config/bondage/bondage.conf -- --help
+export BONDAGE_CONF="${BONDAGE_CONF:-$HOME/.config/bondage/bondage.conf}"
+
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" verify codex
+bondage --config "$BONDAGE_CONF" verify claude
+bondage --config "$BONDAGE_CONF" chain codex -- --help
 ```
 
 You can also run `bondage doctor --help` for the terminal version of this
@@ -372,6 +411,29 @@ upgrade troubleshooting loop. `doctor` is non-mutating; it prints exact
 
 Then open a fresh login shell and confirm your wrapper names still resolve to
 the expected shell functions.
+
+For sandboxed profiles, run non-doxing checks with the profile name rather than
+copying local machine paths into documentation or tickets:
+
+```sh
+export NONO_PROFILE="${NONO_PROFILE:-codex}"
+
+for path in \
+  "$HOME/.ssh" \
+  "$HOME/.npmrc" \
+  "$HOME/.aws" \
+  "$HOME/Library/Keychains"
+do
+  nono why --profile "$NONO_PROFILE" --path "$path" --op read
+done
+
+nono why --profile "$NONO_PROFILE" --path "$HOME/.config/nono/profiles" --op write
+nono why --profile "$NONO_PROFILE" --path "$HOME/.config/nono/profile-drafts" --op write
+```
+
+Expected shape: secrets are denied, active profile writes are denied, and
+`profile-drafts` is writable only for profiles that intentionally support the
+draft-and-promote workflow.
 
 If you use helper scripts for denial diagnostics or restart suggestions, test
 those too. Paths with spaces, quotes, and punctuation are normal on macOS and

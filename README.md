@@ -109,6 +109,13 @@ brew install nvk/tap/agent-bondage
 
 The formula name is `agent-bondage`, but it installs the `bondage` executable.
 
+If you use profiles with `touch_policy = prompt`, install the optional macOS
+approval helper too:
+
+```sh
+brew install nvk/tap/touchid-check
+```
+
 Source build for development:
 
 ```sh
@@ -119,6 +126,21 @@ make
 
 The Homebrew formula installs only the binary. Your local config, pinned tool
 artifacts, and thin shell wrappers remain your responsibility.
+
+## Touch ID helper
+
+`touchid-check` is a small macOS LocalAuthentication helper used by profiles
+that set `touch_policy = prompt`. It prompts for device-owner authentication
+using Touch ID when available, with the normal macOS password fallback. Bondage
+verifies the helper path and fingerprint before running it, so configs should
+pin both `touchid` and `touchid_fp` in `[global]`.
+
+The helper can be installed from the same tap:
+
+```sh
+brew install nvk/tap/touchid-check
+touchid-check --help
+```
 
 ## Current commands
 
@@ -254,16 +276,26 @@ point, but it should be visible in the command output.
 Treat upgrades to `bondage`, `nono`, agent binaries, interpreters, or package
 trees as explicit change events.
 
+Current public baseline:
+
+- `agent-bondage` / `bondage` 0.2.6
+- `touchid-check` 0.2.6
+- Homebrew-managed `nono` should be cleaned up before repinning if old kegs
+  remain installed
+
 Minimum troubleshooting loop:
 
 ```sh
-bondage doctor ~/.config/bondage/bondage.conf
-bondage repin-globals ~/.config/bondage/bondage.conf   # if doctor suggests it
-bondage repin codex ~/.config/bondage/bondage.conf     # if doctor suggests it
-bondage repin claude ~/.config/bondage/bondage.conf    # if doctor suggests it
-bondage verify codex ~/.config/bondage/bondage.conf
-bondage verify claude ~/.config/bondage/bondage.conf
-bondage chain codex ~/.config/bondage/bondage.conf -- --help
+export BONDAGE_CONF="${BONDAGE_CONF:-$HOME/.config/bondage/bondage.conf}"
+
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" doctor
+bondage --config "$BONDAGE_CONF" repin codex    # only if doctor suggests it
+bondage --config "$BONDAGE_CONF" repin claude   # only if doctor suggests it
+bondage --config "$BONDAGE_CONF" verify codex
+bondage --config "$BONDAGE_CONF" verify claude
+bondage --config "$BONDAGE_CONF" chain codex -- --help
 ```
 
 Use `bondage doctor --help` to print this loop at the terminal.
@@ -292,6 +324,52 @@ family itself.
 `verify` still fails closed, but it now tries to explain common Homebrew drift
 in human terms. If a pinned path moved from one installed version to another,
 the error tells you what changed and which `repin` command to run next.
+
+For Homebrew-managed `nono`, run cleanup before repinning if your config pins a
+versioned Cellar path. Otherwise an old keg may still exist and `repin-globals`
+can correctly report "clean" while your launcher remains pinned to the old
+version.
+
+```sh
+brew upgrade nono
+brew cleanup nono
+
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" status | grep 'nono: '
+```
+
+If you use registry-managed `nono` packs for agent profiles, update them after
+upgrading the `nono` binary. Newer packs may use schema fields that older
+`nono` versions cannot parse.
+
+```sh
+nono list --installed
+nono profile show "${NONO_PROFILE:-codex}" >/dev/null
+```
+
+Portable sandbox checks should avoid machine-specific paths. Pick the profile
+you actually launch and confirm both the secret denies and the profile-draft
+split:
+
+```sh
+export NONO_PROFILE="${NONO_PROFILE:-codex}"
+
+for path in \
+  "$HOME/.ssh" \
+  "$HOME/.npmrc" \
+  "$HOME/.aws" \
+  "$HOME/Library/Keychains"
+do
+  nono why --profile "$NONO_PROFILE" --path "$path" --op read
+done
+
+nono why --profile "$NONO_PROFILE" --path "$HOME/.config/nono/profiles" --op write
+nono why --profile "$NONO_PROFILE" --path "$HOME/.config/nono/profile-drafts" --op write
+```
+
+Expected shape: credential paths are denied, active profile writes are denied,
+and `profile-drafts` is writable only when the selected profile intentionally
+supports draft-and-promote profile edits.
 
 Then open a fresh shell and confirm the wrapper names still resolve to shell
 functions rather than silently falling through to raw binaries.
