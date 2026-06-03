@@ -26,7 +26,7 @@ The Homebrew tap formula is:
 From the local repo:
 
 ```zsh
-git tag -a v0.2.6 -m 'bondage 0.2.6'
+git tag -a v0.2.7 -m 'bondage 0.2.7'
 git push origin main --follow-tags
 ```
 
@@ -35,7 +35,7 @@ Then update the tap formula and push it:
 ```zsh
 TAP_DIR="${TAP_DIR:-$HOME/src/homebrew-tap}"
 git -C "$TAP_DIR" add Formula/agent-bondage.rb README.md RELEASING.md
-git -C "$TAP_DIR" commit -m 'agent-bondage 0.2.6'
+git -C "$TAP_DIR" commit -m 'agent-bondage 0.2.7'
 git -C "$TAP_DIR" push origin main
 ```
 

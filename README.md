@@ -142,6 +142,10 @@ brew install nvk/tap/touchid-check
 touchid-check --help
 ```
 
+After installing or upgrading it, run `bondage repin-globals` for configs that
+use `touch_policy = prompt`; the repin step records the concrete Homebrew
+Cellar path and fingerprint rather than the `/opt/homebrew/bin` symlink.
+
 ## Current commands
 
 ```sh
@@ -278,8 +282,8 @@ trees as explicit change events.
 
 Current public baseline:
 
-- `agent-bondage` / `bondage` 0.2.6
-- `touchid-check` 0.2.6
+- `agent-bondage` / `bondage` 0.2.7
+- `touchid-check` 0.2.7
 - Homebrew-managed `nono` should be cleaned up before repinning if old kegs
   remain installed
 

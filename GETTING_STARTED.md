@@ -369,9 +369,19 @@ On macOS, install the helper with:
 brew install nvk/tap/touchid-check
 ```
 
-Then pin it in `[global]` with the exact path and hash reported by
-`bondage hash-file /opt/homebrew/bin/touchid-check`. The sample config uses
-`touchid = /opt/homebrew/bin/touchid-check` and `touchid_fp = sha256:replace-me`.
+Then repin globals so `bondage` records the resolved Homebrew Cellar path and
+fingerprint instead of the `/opt/homebrew/bin` symlink:
+
+```sh
+export BONDAGE_CONF="${BONDAGE_CONF:-$HOME/.config/bondage/bondage.conf}"
+bondage --config "$BONDAGE_CONF" repin-globals
+bondage --config "$BONDAGE_CONF" doctor
+```
+
+For a brand-new manual config, find the concrete helper path with
+`brew list touchid-check | grep /bin/touchid-check` and hash that path. The
+sample config keeps `touchid_fp = sha256:replace-me` until you repin or fill in
+the concrete installed helper path.
 
 If a profile does not need it, keep:
 
