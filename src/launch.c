@@ -239,6 +239,59 @@ bondage_env_append_or_replace(char ***envp,
   return 1;
 }
 
+static int
+bondage_env_set_value(char ***envp,
+                      size_t *envc,
+                      const char *key,
+                      const char *value,
+                      char *errbuf,
+                      size_t errbufsz)
+{
+  size_t len;
+  char *assignment;
+  int ok;
+
+  if (value == NULL) value = "";
+  len = strlen(key) + 1 + strlen(value) + 1;
+  assignment = malloc(len);
+  if (assignment == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+
+  snprintf(assignment, len, "%s=%s", key, value);
+  ok = bondage_env_append_or_replace(envp, envc, assignment,
+                                     errbuf, errbufsz);
+  free(assignment);
+  return ok;
+}
+
+static int
+bondage_env_set_flag(char ***envp,
+                     size_t *envc,
+                     const char *key,
+                     int enabled,
+                     char *errbuf,
+                     size_t errbufsz)
+{
+  return bondage_env_set_value(envp, envc, key, enabled ? "1" : "0",
+                               errbuf, errbufsz);
+}
+
+static int
+bondage_env_set_count(char ***envp,
+                      size_t *envc,
+                      const char *key,
+                      size_t count,
+                      char *errbuf,
+                      size_t errbufsz)
+{
+  char value[32];
+
+  snprintf(value, sizeof(value), "%lu", (unsigned long)count);
+  return bondage_env_set_value(envp, envc, key, value, errbuf, errbufsz);
+}
+
 static void
 bondage_free_envp(char **envp, size_t envc)
 {
@@ -485,7 +538,8 @@ cleanup:
 }
 
 static int
-bondage_build_envp(const struct bondage_profile *profile,
+bondage_build_envp(const struct bondage_config *config,
+                   const struct bondage_profile *profile,
                    char ***envp_out,
                    size_t *envc_out,
                    char *errbuf,
@@ -556,6 +610,62 @@ bondage_build_envp(const struct bondage_profile *profile,
       goto cleanup;
     }
     free(assignment);
+  }
+
+  /*
+   * Publish a small, non-secret launch manifest for trusted harness startup
+   * adapters. These assignments intentionally run after profile env_set and
+   * env_command entries so inherited or caller-provided values cannot spoof
+   * the resolved Bondage profile.
+   */
+  if (!bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_PROFILE_CONTEXT_VERSION", "1",
+                             errbuf, errbufsz) ||
+      !bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_PROFILE", profile->name,
+                             errbuf, errbufsz) ||
+      !bondage_env_set_flag(&envp, &envc,
+                            "BONDAGE_USE_ENVCHAIN", profile->use_envchain,
+                            errbuf, errbufsz) ||
+      !bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_ENVCHAIN_NAMESPACES",
+                             profile->use_envchain ? profile->namespace_name : "",
+                             errbuf, errbufsz) ||
+      !bondage_env_set_flag(&envp, &envc,
+                            "BONDAGE_USE_NONO", profile->use_nono,
+                            errbuf, errbufsz) ||
+      !bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_NONO_PROFILE",
+                             profile->use_nono ? profile->nono_profile : "",
+                             errbuf, errbufsz) ||
+      !bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_NONO_BIN",
+                             profile->use_nono ? config->global.nono : "",
+                             errbuf, errbufsz) ||
+      !bondage_env_set_value(&envp, &envc,
+                             "BONDAGE_TOUCH_POLICY", profile->touch_policy,
+                             errbuf, errbufsz) ||
+      !bondage_env_set_flag(&envp, &envc,
+                            "BONDAGE_NONO_ALLOW_CWD",
+                            profile->nono_allow_cwd,
+                            errbuf, errbufsz) ||
+      !bondage_env_set_count(&envp, &envc,
+                             "BONDAGE_NONO_ALLOW_DIR_COUNT",
+                             profile->nono_allow_dirs.count,
+                             errbuf, errbufsz) ||
+      !bondage_env_set_count(&envp, &envc,
+                             "BONDAGE_NONO_READ_DIR_COUNT",
+                             profile->nono_read_dirs.count,
+                             errbuf, errbufsz) ||
+      !bondage_env_set_count(&envp, &envc,
+                             "BONDAGE_NONO_ALLOW_FILE_COUNT",
+                             profile->nono_allow_files.count,
+                             errbuf, errbufsz) ||
+      !bondage_env_set_count(&envp, &envc,
+                             "BONDAGE_NONO_READ_FILE_COUNT",
+                             profile->nono_read_files.count,
+                             errbuf, errbufsz)) {
+    goto cleanup;
   }
 
   *envp_out = envp;
@@ -757,7 +867,8 @@ bondage_prepare_exec(const struct bondage_config *config,
     }
   }
 
-  if (!bondage_build_envp(profile, &args->envp, &args->envc, errbuf, errbufsz)) {
+  if (!bondage_build_envp(config, profile, &args->envp, &args->envc,
+                          errbuf, errbufsz)) {
     return 0;
   }
 

@@ -11,6 +11,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 root="$(pwd)"
 nono_fp="$(./bondage hash-file "$root/fixtures/fake-nono")"
 codex_fp="$(./bondage hash-file "$root/fixtures/fake-codex")"
+profile_context_fp="$(./bondage hash-file "$root/fixtures/fake-profile-context")"
 
 doctor_help="$(./bondage doctor --help 2>&1)"
 grep -F "Upgrade troubleshooting loop:" <<<"$doctor_help" >/dev/null
@@ -147,6 +148,65 @@ if [ -s "$tmpdir/quiet.err" ]; then
   cat "$tmpdir/quiet.err" >&2
   exit 1
 fi
+
+metadata_conf="$tmpdir/metadata.conf"
+cat >"$metadata_conf" <<EOF
+[global]
+nono = $root/fixtures/fake-nono
+nono_fp = $nono_fp
+
+[profile "metadata"]
+use_envchain = false
+use_nono = false
+touch_policy = none
+target_kind = native
+target = $root/fixtures/fake-profile-context
+target_fp = $profile_context_fp
+env_set = BONDAGE_PROFILE=spoofed
+env_set = BONDAGE_USE_NONO=1
+EOF
+
+BONDAGE_PROFILE=caller-spoof \
+  BONDAGE_CONF="$metadata_conf" \
+  ./bondage exec metadata >"$tmpdir/metadata.out" 2>"$tmpdir/metadata.err"
+grep -Fx 'BONDAGE_PROFILE_CONTEXT_VERSION=1' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_PROFILE=metadata' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_USE_ENVCHAIN=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_ENVCHAIN_NAMESPACES=' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_USE_NONO=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_PROFILE=' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_BIN=' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_TOUCH_POLICY=none' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_ALLOW_CWD=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_ALLOW_DIR_COUNT=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_READ_DIR_COUNT=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_ALLOW_FILE_COUNT=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_READ_FILE_COUNT=0' "$tmpdir/metadata.out" >/dev/null
+
+envchain_fp="$(./bondage hash-file "$root/fixtures/fake-envchain")"
+credentialed_conf="$tmpdir/credentialed.conf"
+cat >"$credentialed_conf" <<EOF
+[global]
+envchain = $root/fixtures/fake-envchain
+envchain_fp = $envchain_fp
+nono = $root/fixtures/fake-nono
+nono_fp = $nono_fp
+
+[profile "credentialed"]
+namespace = alpha,beta
+use_envchain = true
+use_nono = false
+touch_policy = none
+target_kind = native
+target = $root/fixtures/fake-profile-context
+target_fp = $profile_context_fp
+EOF
+
+BONDAGE_CONF="$credentialed_conf" \
+  ./bondage exec credentialed >"$tmpdir/credentialed.out" 2>"$tmpdir/credentialed.err"
+grep -Fx 'BONDAGE_PROFILE=credentialed' "$tmpdir/credentialed.out" >/dev/null
+grep -Fx 'BONDAGE_USE_ENVCHAIN=1' "$tmpdir/credentialed.out" >/dev/null
+grep -Fx 'BONDAGE_ENVCHAIN_NAMESPACES=alpha,beta' "$tmpdir/credentialed.out" >/dev/null
 
 unknown="$tmpdir/unknown.conf"
 cat >"$unknown" <<EOF

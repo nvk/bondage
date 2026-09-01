@@ -282,7 +282,7 @@ trees as explicit change events.
 
 Current public baseline:
 
-- `agent-bondage` / `bondage` 0.2.7
+- `agent-bondage` / `bondage` 0.2.8
 - `touchid-check` 0.2.7
 - Homebrew-managed `nono` should be cleaned up before repinning if old kegs
   remain installed
@@ -404,6 +404,9 @@ Implemented now:
 - profile-driven target args for stable tool policy flags
 - global `nono_profile_root` injection so short profile names expand to explicit JSON paths
 - profile-driven static env injection and command-derived env vars
+- sanitized launch metadata for trusted harness startup adapters, including the
+  resolved Bondage profile, envchain namespaces, nono profile, Touch ID policy,
+  and nono launch-grant counts (never credential values)
 - Touch ID launch policy via pinned `touchid-check`
 - prelaunch directory creation for profiles that need state dirs before sandbox start
 - exact argv construction for:
