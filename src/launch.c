@@ -368,23 +368,6 @@ cleanup:
   return ok;
 }
 
-static const char *
-bondage_env_command_expected_fp(const struct bondage_profile *profile,
-                                const char *name)
-{
-  size_t i;
-  size_t name_len = strlen(name);
-
-  for (i = 0; i < profile->env_command_fp.count; i++) {
-    const char *entry = profile->env_command_fp.items[i];
-    if (strncmp(entry, name, name_len) == 0 && entry[name_len] == '=') {
-      return entry + name_len + 1;
-    }
-  }
-
-  return NULL;
-}
-
 static void
 bondage_free_argv_list(char **argv, size_t argc)
 {
@@ -459,8 +442,6 @@ bondage_capture_command_output(const struct bondage_profile *profile,
 {
   char **argv = NULL;
   size_t argc = 0;
-  const char *expected_fp;
-  char actual_fp[256];
   int pipefd[2];
   pid_t pid;
   char *buffer = NULL;
@@ -473,19 +454,10 @@ bondage_capture_command_output(const struct bondage_profile *profile,
     return 0;
   }
 
-  expected_fp = bondage_env_command_expected_fp(profile, env_name);
-  if (expected_fp != NULL) {
-    if (!bondage_hash_file_path(argv[0], 1, actual_fp, sizeof(actual_fp),
-                                errbuf, errbufsz)) {
-      goto cleanup;
-    }
-    if (strcmp(expected_fp, actual_fp) != 0) {
-      bondage_set_error(errbuf, errbufsz,
-                        "env_command %s fingerprint mismatch for %s: "
-                        "expected=%s actual=%s",
-                        env_name, argv[0], expected_fp, actual_fp);
-      goto cleanup;
-    }
+  /* Recheck immediately before execution, even after the profile audit. */
+  if (!bondage_verify_env_command(profile, env_name, argv[0], NULL,
+                                  errbuf, errbufsz)) {
+    goto cleanup;
   }
 
   if (pipe(pipefd) < 0) {

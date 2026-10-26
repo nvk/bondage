@@ -799,6 +799,86 @@ bondage_verify_tree(const char *label,
 }
 
 int
+bondage_verify_env_command(const struct bondage_profile *profile,
+                           const char *name,
+                           const char *path,
+                           FILE *stream,
+                           char *errbuf,
+                           size_t errbufsz)
+{
+  size_t i;
+  size_t name_len = strlen(name);
+  const char *expected_fp = NULL;
+  char actual_fp[BONDAGE_SHA256_STRLEN];
+
+  if (profile->env_command_fp.count == 0) return 1;
+  for (i = 0; i < profile->env_command_fp.count; i++) {
+    const char *entry = profile->env_command_fp.items[i];
+    if (strncmp(entry, name, name_len) == 0 && entry[name_len] == '=') {
+      expected_fp = entry + name_len + 1;
+      break;
+    }
+  }
+  /* Config validation enforces coverage; never silently opt out here. */
+  if (expected_fp == NULL) {
+    bondage_set_error(errbuf, errbufsz, "env_command %s has no matching env_command_fp",
+                      name);
+    return 0;
+  }
+  if (!bondage_hash_file_path(path, 1, actual_fp, sizeof(actual_fp), errbuf, errbufsz)) {
+    return 0;
+  }
+  if (strcmp(expected_fp, actual_fp) != 0) {
+    bondage_set_error(errbuf, errbufsz,
+                      "env_command %s fingerprint mismatch for %s: expected=%s actual=%s",
+                      name, path, expected_fp, actual_fp);
+    return 0;
+  }
+  if (stream != NULL) fprintf(stream, "ok: env_command %s %s\n", name, path);
+  return 1;
+}
+
+int
+bondage_verify_env_commands(const struct bondage_profile *profile,
+                            FILE *stream,
+                            char *errbuf,
+                            size_t errbufsz)
+{
+  size_t i;
+
+  if (profile->env_command_fp.count == 0) return 1;
+  for (i = 0; i < profile->env_command.count; i++) {
+    const char *spec = profile->env_command.items[i];
+    const char *eq = strchr(spec, '=');
+    const char *start;
+    char *name;
+    char *path;
+    int ok;
+
+    if (eq == NULL || eq == spec) {
+      bondage_set_error(errbuf, errbufsz, "env_command requires NAME=/absolute/cmd ...");
+      return 0;
+    }
+    /* Match the first token consumed by bondage_split_command; no shell parsing. */
+    start = eq + 1;
+    start += strspn(start, " \t");
+    name = bondage_xstrndup(spec, (size_t)(eq - spec));
+    path = bondage_xstrndup(start, strcspn(start, " \t"));
+    if (name == NULL || path == NULL) {
+      free(name);
+      free(path);
+      bondage_set_error(errbuf, errbufsz, "out of memory");
+      return 0;
+    }
+    ok = bondage_verify_env_command(profile, name, path, stream, errbuf, errbufsz);
+    free(name);
+    free(path);
+    if (!ok) return 0;
+  }
+  return 1;
+}
+
+int
 bondage_verify_profile(const struct bondage_config *config,
                        const struct bondage_profile *profile,
                        FILE *stream,
@@ -859,7 +939,7 @@ bondage_verify_profile(const struct bondage_config *config,
     return 0;
   }
 
-  return 1;
+  return bondage_verify_env_commands(profile, stream, errbuf, errbufsz);
 }
 
 void

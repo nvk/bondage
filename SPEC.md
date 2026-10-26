@@ -77,7 +77,9 @@ Implemented now:
 - static env injection and command-derived env vars
 - optional `env_command_fp = NAME=sha256:...` entries fingerprint-pin the
   helper binary executed by the matching `env_command = NAME=/absolute/cmd`;
-  pinned helpers are re-hashed and fail closed before execution
+  pinning requires unique names and exact coverage after inheritance;
+  pinned helpers are audited without execution by `verify`, `doctor`, and
+  `repair`, and re-hashed immediately before execution; helper drift stays manual
 - Touch ID / local auth launch policy
 - prelaunch directory creation
 - `execve()` launch for native and script targets

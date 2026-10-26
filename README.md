@@ -98,6 +98,9 @@ transcript.
 make
 ```
 
+Run `make test` for the shell tests and Python 3 security regression tests.
+Tests use temporary configurations and fixtures, not your live launcher config.
+
 ## Install
 
 Homebrew tap install:
@@ -275,16 +278,24 @@ pin their binaries when the value matters:
 
 ```ini
 [defaults "github-env"]
-env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
+env_command = GH_TOKEN=/opt/homebrew/Cellar/gh/<version>/bin/gh auth token
 env_command_fp = GH_TOKEN=sha256:...
-env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
+env_command = GITHUB_TOKEN=/opt/homebrew/Cellar/gh/<version>/bin/gh auth token
 env_command_fp = GITHUB_TOKEN=sha256:...
 ```
 
-When `env_command_fp` is present for a name, `bondage` re-hashes the helper
-binary and fails closed on mismatch before executing it. `env_command_fp`
-entries must cover every `env_command` entry when used, and they inherit like
-any other list key.
+Use the installed helper's canonical absolute path, not a Homebrew symlink;
+replace `<version>` and compute its pin with `bondage hash-file <path>`.
+When `env_command_fp` is used, each `env_command` name must have exactly one
+matching pin. Unknown pin names and duplicate command or pin names are rejected.
+The lists inherit like other list keys, and coverage is checked after inheritance.
+
+`verify`, `doctor`, and `repair` check pinned helpers without executing them.
+Launch rechecks each helper immediately before execution and fails closed on a
+mismatch. Helper drift requires investigation and a manual update of the owning
+`env_command` / `env_command_fp` entries; `repin` does not refresh these entries,
+and `repair` refuses to bless them automatically. Unpinned helpers remain an
+explicit opt-out.
 
 `status`, `verify`, `doctor`, and `repin` report where inherited pin fields
 come from. If `repin codex` refreshes `defaults "codex-target"`, every profile
@@ -339,13 +350,16 @@ stale or broken pins, and tells you which repair command to run next.
 
 `repair` is the interactive batch pass. It runs the same analysis, prints every
 pending repin as one plan, asks for a typed `yes` on a real terminal, and then
-applies the changes atomically. It refuses two things on purpose:
+applies the changes atomically. Different profiles retain their own targets,
+interpreters, and package roots; shared-owner updates must agree. It refuses:
 
 - non-interactive use (piped answers, scripts, CI), because blessing a new
   binary must stay a human decision
 - same-version fingerprint changes, because a binary whose hash changed
   without a version move is a tamper signal, not a package-manager upgrade;
   those stay manual via `repin` / `repin-globals` after you investigate
+- missing or mismatched pinned `env_command` helpers, which require manual
+  investigation and config updates
 
 Everything `repair` blesses is a change you could already bless manually; it
 only removes the copy-paste between `doctor` and the individual `repin`

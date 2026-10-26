@@ -21,6 +21,21 @@ bondage_hash_tree_path(const char *path,
                        size_t errbufsz);
 
 int
+bondage_verify_env_command(const struct bondage_profile *profile,
+                           const char *name,
+                           const char *path,
+                           FILE *stream,
+                           char *errbuf,
+                           size_t errbufsz);
+
+/* Verify pinned helpers without running them or fetching their output. */
+int
+bondage_verify_env_commands(const struct bondage_profile *profile,
+                            FILE *stream,
+                            char *errbuf,
+                            size_t errbufsz);
+
+int
 bondage_verify_profile(const struct bondage_config *config,
                        const struct bondage_profile *profile,
                        FILE *stream,

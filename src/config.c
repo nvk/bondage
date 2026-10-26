@@ -716,6 +716,17 @@ bondage_string_has_key_value(const char *value)
 }
 
 static int
+bondage_assignment_names_equal(const char *left, const char *right)
+{
+  const char *left_eq = strchr(left, '=');
+  const char *right_eq = strchr(right, '=');
+
+  return left_eq != NULL && right_eq != NULL &&
+         left_eq - left == right_eq - right &&
+         strncmp(left, right, (size_t)(left_eq - left)) == 0;
+}
+
+static int
 bondage_validate_string_list_paths(const struct bondage_string_list *list,
                                    const char *label,
                                    const char *profile_name,
@@ -873,6 +884,35 @@ bondage_validate_profile(const struct bondage_profile *profile, char *errbuf,
                         "profile '%s' env_command_fp requires NAME=sha256:...",
                         profile->name);
       return 0;
+    }
+  }
+
+  if (profile->env_command_fp.count != 0) {
+    for (i = 0; i < profile->env_command.count; i++) {
+      const char *command = profile->env_command.items[i];
+      int name_len = (int)(strchr(command, '=') - command);
+      size_t j;
+      size_t matches = 0;
+
+      for (j = 0; j < i; j++) {
+        if (bondage_assignment_names_equal(command, profile->env_command.items[j])) {
+          bondage_set_error(errbuf, errbufsz,
+                            "profile '%s' has duplicate pinned env_command name '%.*s'",
+                            profile->name, name_len, command);
+          return 0;
+        }
+      }
+      for (j = 0; j < profile->env_command_fp.count; j++) {
+        if (bondage_assignment_names_equal(command, profile->env_command_fp.items[j])) {
+          matches++;
+        }
+      }
+      if (matches != 1) {
+        bondage_set_error(errbuf, errbufsz,
+                          "profile '%s' env_command '%.*s' requires exactly one matching env_command_fp",
+                          profile->name, name_len, command);
+        return 0;
+      }
     }
   }
 

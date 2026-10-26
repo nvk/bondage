@@ -31,6 +31,7 @@ test: all
 	./tests/test-cli-options.sh
 	./tests/test-env-command-pinning.sh
 	./tests/test-repair.sh
+	python3 ./tests/test-security-regressions.py
 
 clean:
 	rm -f $(BIN) touchid-check src/*.o
