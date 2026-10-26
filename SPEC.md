@@ -46,6 +46,10 @@ Key rules:
 - `repin` and `doctor` must report the owning section for inherited pins
 - `chain` is the public launch-chain inspection command; `argv` remains a
   compatibility alias
+- `repair` batches drift fixes interactively: shows the full repin plan,
+  requires a typed `yes` on a TTY, applies routine package-manager upgrades,
+  and refuses same-version fingerprint changes (possible tampering), which
+  stay manual via `repin` / `repin-globals` after investigation
 - `exec` must print a compact prelaunch summary unless explicitly suppressed
 - config discovery must prefer explicit/user policy before repo-local fallback:
   explicit path, `BONDAGE_CONF`, user config, `./.bondage.conf`, then

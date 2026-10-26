@@ -30,6 +30,7 @@ test: all
 	./tests/test-config-defaults.sh
 	./tests/test-cli-options.sh
 	./tests/test-env-command-pinning.sh
+	./tests/test-repair.sh
 
 clean:
 	rm -f $(BIN) touchid-check src/*.o
