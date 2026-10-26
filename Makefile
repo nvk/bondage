@@ -2,6 +2,8 @@ CC ?= cc
 CFLAGS ?= -Wall -Wextra -Werror -std=c99 -pedantic
 CPPFLAGS ?= -Iinclude
 LDFLAGS ?=
+VERSION := 0.3.1
+CPPFLAGS += -DBONDAGE_VERSION=\"$(VERSION)\"
 
 BIN := bondage
 UNAME := $(shell uname)

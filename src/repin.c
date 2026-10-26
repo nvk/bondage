@@ -1450,6 +1450,7 @@ bondage_doctor(const char *config_path)
   char errbuf[256];
   size_t i;
   int stale = 0;
+  int incomplete = 0;
 
   memset(&global_plan, 0, sizeof(global_plan));
   memset(&suggested_profiles, 0, sizeof(suggested_profiles));
@@ -1499,6 +1500,15 @@ bondage_doctor(const char *config_path)
 
     memset(&plan, 0, sizeof(plan));
     if (!bondage_build_repin_plan(&config, profile, &plan, errbuf, sizeof(errbuf))) {
+      if (strstr(errbuf, "Operation not permitted") != NULL ||
+          strstr(errbuf, "Permission denied") != NULL) {
+        printf("profile %s: inaccessible\n", profile->name);
+        printf("  error: %s\n", errbuf);
+        printf("  note: sandbox access is insufficient; rerun doctor from a host shell\n");
+        incomplete = 1;
+        bondage_repin_plan_free(&plan);
+        continue;
+      }
       printf("profile %s: broken\n", profile->name);
       printf("  error: %s\n", errbuf);
       stale = 1;
@@ -1534,7 +1544,7 @@ bondage_doctor(const char *config_path)
     bondage_repin_plan_free(&plan);
   }
 
-  if (!stale) {
+  if (!stale && !incomplete) {
     printf("status: clean\n");
     bondage_repin_plan_free(&global_plan);
     bondage_named_list_free(&suggested_profiles);
@@ -1548,7 +1558,12 @@ bondage_doctor(const char *config_path)
   for (i = 0; i < suggested_profiles.count; i++) {
     printf("suggest: bondage repin %s %s\n", suggested_profiles.items[i], config_path);
   }
-  printf("status: stale\n");
+  if (incomplete) {
+    printf("note: one or more paths could not be checked in the current sandbox\n");
+  }
+  if (stale && incomplete) printf("status: stale-incomplete\n");
+  else if (stale) printf("status: stale\n");
+  else printf("status: incomplete\n");
 
   bondage_repin_plan_free(&global_plan);
   bondage_named_list_free(&suggested_profiles);

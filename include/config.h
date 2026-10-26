@@ -46,9 +46,11 @@ struct bondage_profile {
   int use_envchain;
   int use_nono;
   int nono_allow_cwd;
+  int nono_allow_gpu;
   int use_envchain_set;
   int use_nono_set;
   int nono_allow_cwd_set;
+  int nono_allow_gpu_set;
   struct bondage_string_list nono_allow_dirs;
   struct bondage_string_list nono_read_dirs;
   struct bondage_string_list nono_allow_files;

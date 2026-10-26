@@ -152,6 +152,7 @@ Cellar path and fingerprint rather than the `/opt/homebrew/bin` symlink.
 ## Current commands
 
 ```sh
+./bondage --version
 ./bondage [--config <path>] status [config]
 ./bondage [--config <path>] doctor [config]
 ./bondage [--config <path>] verify <profile> [config]
@@ -223,6 +224,7 @@ policy back into shell wrappers:
 ```ini
 [defaults "agent-nono"]
 nono_allow_cwd = true
+nono_allow_gpu = false
 nono_allow_dir = /Users/you/Library/Mobile Documents/com~apple~CloudDocs/claude-sandbox
 nono_allow_file = /dev/tty
 nono_read_file = /dev/urandom
@@ -249,6 +251,8 @@ Rules:
 - defaults are applied in order, then profile-local keys override them
 - `nono_allow_cwd = true` passes both `--workdir <current directory>` and
   `--allow-cwd` to `nono` so `$WORKDIR` profile expansion is deterministic
+- `nono_allow_gpu = true` passes Nono's explicit `--allow-gpu` request; the
+  selected Nono profile must independently authorize GPU access
 - list keys append in order, so inherited `nono_allow_dir`, `nono_read_dir`,
   `nono_allow_file`, and `nono_read_file` entries come before profile-local entries
 - repeatable `target_arg` entries are appended after the verified target and
@@ -347,6 +351,9 @@ In practice:
 
 `doctor` is the non-mutating pass. It checks the whole config, exits nonzero on
 stale or broken pins, and tells you which repair command to run next.
+If the current outer sandbox makes a pinned path unreadable, `doctor` reports
+that profile as `inaccessible` and the result as `incomplete`; it does not
+mislabel the path as stale or suggest a repin.
 
 `repair` is the interactive batch pass. It runs the same analysis, prints every
 pending repin as one plan, asks for a typed `yes` on a real terminal, and then
@@ -443,7 +450,7 @@ Implemented now:
 - named defaults and explicit profile inheritance for repeated launch policy
 - optional `envchain` per profile
 - optional `nono` per profile, including rawdog/no-`nono` launches
-- profile-driven `nono` flags like `--workdir`, `--allow-cwd`, `--allow`,
+- profile-driven `nono` flags like `--workdir`, `--allow-cwd`, `--allow-gpu`, `--allow`,
   `--read`, `--allow-file`, and `--read-file`
 - profile-driven target args for stable tool policy flags
 - global `nono_profile_root` injection so short profile names expand to explicit JSON paths
@@ -476,6 +483,12 @@ Notes:
   names, tab colors, and small prompt-shaping helpers
 
 ## Release Notes
+
+### 0.3.1
+
+- add `--version`
+- add typed `nono_allow_gpu` profile/defaults support
+- distinguish sandbox-inaccessible doctor checks from repairable pin drift
 
 For release/tag and tap update steps, see
 [`RELEASING.md`](RELEASING.md).

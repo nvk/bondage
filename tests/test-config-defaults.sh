@@ -24,7 +24,11 @@ cat >"$old_conf" <<EOF
 nono = $root/fixtures/fake-nono
 nono_fp = $nono_fp
 
+[defaults "gpu"]
+nono_allow_gpu = true
+
 [profile "codex"]
+inherits = gpu
 use_envchain = false
 use_nono = true
 nono_profile = custom-codex
@@ -36,6 +40,9 @@ nono_allow_cwd = true
 EOF
 
 ./bondage verify codex "$old_conf" >/dev/null
+gpu_argv="$(./bondage chain codex "$old_conf" -- ping)"
+grep -F 'argv[4] = --allow-gpu' <<<"$gpu_argv" >/dev/null
+grep -F 'argv[5] = --workdir' <<<"$gpu_argv" >/dev/null
 
 conf="$tmpdir/defaults.conf"
 cat >"$conf" <<EOF
@@ -178,6 +185,7 @@ grep -Fx 'BONDAGE_NONO_PROFILE=' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_NONO_BIN=' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_TOUCH_POLICY=none' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_NONO_ALLOW_CWD=0' "$tmpdir/metadata.out" >/dev/null
+grep -Fx 'BONDAGE_NONO_ALLOW_GPU=0' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_NONO_ALLOW_DIR_COUNT=0' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_NONO_READ_DIR_COUNT=0' "$tmpdir/metadata.out" >/dev/null
 grep -Fx 'BONDAGE_NONO_ALLOW_FILE_COUNT=0' "$tmpdir/metadata.out" >/dev/null

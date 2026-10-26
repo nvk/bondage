@@ -51,6 +51,8 @@ Key rules:
   and refuses same-version fingerprint changes (possible tampering), which
   stay manual via `repin` / `repin-globals` after investigation
 - `exec` must print a compact prelaunch summary unless explicitly suppressed
+- GPU access must be an explicit typed profile setting that emits
+  `nono --allow-gpu`; Nono's profile remains the independent authorization gate
 - config discovery must prefer explicit/user policy before repo-local fallback:
   explicit path, `BONDAGE_CONF`, user config, `./.bondage.conf`, then
   `./bondage.conf`
@@ -73,6 +75,7 @@ Implemented now:
 - optional `nono`
 - global nono profile-root expansion for explicit JSON profile paths
 - `nono` flag injection
+- typed `nono_allow_gpu` injection
 - target argument injection for stable tool startup policy
 - static env injection and command-derived env vars
 - optional `env_command_fp = NAME=sha256:...` entries fingerprint-pin the

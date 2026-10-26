@@ -483,6 +483,13 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
     profile->nono_allow_cwd_set = 1;
     return 1;
   }
+  if (strcmp(key, "nono_allow_gpu") == 0) {
+    if (!bondage_parse_bool(value, &profile->nono_allow_gpu, errbuf, errbufsz)) {
+      return 0;
+    }
+    profile->nono_allow_gpu_set = 1;
+    return 1;
+  }
   if (strcmp(key, "nono_allow_file") == 0) {
     return bondage_string_list_append(&profile->nono_allow_files, value,
                                       errbuf, errbufsz);
@@ -581,6 +588,10 @@ bondage_apply_profile_values(struct bondage_profile *dst,
   if (src->nono_allow_cwd_set) {
     dst->nono_allow_cwd = src->nono_allow_cwd;
     dst->nono_allow_cwd_set = 1;
+  }
+  if (src->nono_allow_gpu_set) {
+    dst->nono_allow_gpu = src->nono_allow_gpu;
+    dst->nono_allow_gpu_set = 1;
   }
 
   if (!bondage_apply_string(&dst->namespace_name, src->namespace_name,
@@ -786,6 +797,7 @@ bondage_validate_profile(const struct bondage_profile *profile, char *errbuf,
 
   if (!profile->use_nono &&
       (profile->nono_profile != NULL || profile->nono_allow_cwd ||
+       profile->nono_allow_gpu ||
        profile->nono_allow_dirs.count != 0 || profile->nono_read_dirs.count != 0 ||
        profile->nono_allow_files.count != 0 || profile->nono_read_files.count != 0)) {
     bondage_set_error(errbuf, errbufsz,

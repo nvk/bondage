@@ -30,6 +30,8 @@ EOF
 
 ./bondage --help >"$tmpdir/help.out"
 grep -F -- '--config <path>' "$tmpdir/help.out" >/dev/null
+test "$(./bondage --version)" = "bondage 0.3.1"
+test "$(./bondage -V)" = "bondage 0.3.1"
 
 ./bondage --config "$conf" status >"$tmpdir/status.out"
 grep -F 'config:' "$tmpdir/status.out" >/dev/null

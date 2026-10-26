@@ -658,6 +658,10 @@ bondage_build_envp(const struct bondage_config *config,
                             "BONDAGE_NONO_ALLOW_CWD",
                             profile->nono_allow_cwd,
                             errbuf, errbufsz) ||
+      !bondage_env_set_flag(&envp, &envc,
+                            "BONDAGE_NONO_ALLOW_GPU",
+                            profile->nono_allow_gpu,
+                            errbuf, errbufsz) ||
       !bondage_env_set_count(&envp, &envc,
                              "BONDAGE_NONO_ALLOW_DIR_COUNT",
                              profile->nono_allow_dirs.count,
@@ -746,6 +750,7 @@ bondage_build_argv(const struct bondage_config *config,
   if (profile->use_envchain) fixed_argc += 2;
   if (profile->use_nono) {
     fixed_argc += 5;
+    if (profile->nono_allow_gpu) fixed_argc += 1;
     if (profile->nono_allow_cwd) {
       if (getcwd(cwd_buf, sizeof(cwd_buf)) == NULL) {
         bondage_set_error(errbuf, errbufsz,
@@ -788,6 +793,9 @@ bondage_build_argv(const struct bondage_config *config,
     argv[cursor++] = bondage_xstrdup("--profile");
     argv[cursor++] = nono_profile_arg;
     nono_profile_arg = NULL;
+    if (profile->nono_allow_gpu) {
+      argv[cursor++] = bondage_xstrdup("--allow-gpu");
+    }
     if (profile->nono_allow_cwd) {
       argv[cursor++] = bondage_xstrdup("--workdir");
       argv[cursor++] = bondage_xstrdup(nono_workdir);

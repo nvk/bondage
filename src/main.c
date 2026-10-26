@@ -61,6 +61,7 @@ struct bondage_command {
 struct bondage_cli_options {
   const char *config_path;
   int help;
+  int version;
   int command_index;
 };
 
@@ -98,6 +99,7 @@ bondage_usage(FILE *stream, const char *progname)
           "\n"
           "Options:\n"
           "  -c, --config <path>  Read this bondage config file.\n"
+          "  -V, --version        Show the bondage version.\n"
           "  -h, --help           Show this help.\n",
           progname, progname, progname, progname, progname, progname, progname,
           progname, progname, progname, progname);
@@ -202,6 +204,10 @@ bondage_global_option_argc(int argc, char **argv)
       i++;
       continue;
     }
+    if (strcmp(arg, "-V") == 0 || strcmp(arg, "--version") == 0) {
+      i++;
+      continue;
+    }
 
     /* Let getopt_long report unknown leading options. */
     i++;
@@ -217,6 +223,7 @@ bondage_parse_global_options(int argc, char **argv,
   static const struct option long_options[] = {
     {"config", required_argument, NULL, 'c'},
     {"help", no_argument, NULL, 'h'},
+    {"version", no_argument, NULL, 'V'},
     {NULL, 0, NULL, 0}
   };
   int parse_argc;
@@ -224,19 +231,23 @@ bondage_parse_global_options(int argc, char **argv,
 
   options->config_path = NULL;
   options->help = 0;
+  options->version = 0;
   options->command_index = 1;
 
   parse_argc = bondage_global_option_argc(argc, argv);
   optind = 1;
   opterr = 0;
 
-  while ((option = getopt_long(parse_argc, argv, ":c:h", long_options, NULL)) != -1) {
+  while ((option = getopt_long(parse_argc, argv, ":c:hV", long_options, NULL)) != -1) {
     switch (option) {
     case 'c':
       options->config_path = optarg;
       break;
     case 'h':
       options->help = 1;
+      break;
+    case 'V':
+      options->version = 1;
       break;
     case ':':
       fprintf(stderr, "bondage: option requires an argument: -%c\n", optopt);
@@ -394,6 +405,7 @@ bondage_print_profile_header(const struct bondage_profile *profile)
   if (profile->nono_profile != NULL) {
     printf("nono_profile: %s\n", profile->nono_profile);
   }
+  printf("nono_allow_gpu: %s\n", profile->nono_allow_gpu ? "true" : "false");
   printf("touch_policy: %s\n", profile->touch_policy);
   printf("target_kind: %s\n", profile->target_kind);
   printf("target: %s\n", profile->target);
@@ -434,9 +446,10 @@ bondage_print_launch_summary(const struct bondage_config *config,
 
   if (profile->use_nono) {
     fprintf(stream,
-            "  nono: profile %s allow_cwd=%s grants=%lu allow_dir, %lu read_dir, %lu allow_file, %lu read_file\n",
+            "  nono: profile %s allow_cwd=%s allow_gpu=%s grants=%lu allow_dir, %lu read_dir, %lu allow_file, %lu read_file\n",
             profile->nono_profile != NULL ? profile->nono_profile : "(none)",
             bondage_bool_word(profile->nono_allow_cwd),
+            bondage_bool_word(profile->nono_allow_gpu),
             (unsigned long)profile->nono_allow_dirs.count,
             (unsigned long)profile->nono_read_dirs.count,
             (unsigned long)profile->nono_allow_files.count,
@@ -482,6 +495,7 @@ bondage_status(const char *config_path)
     if (profile->nono_profile != NULL) {
       printf("  nono_profile: %s\n", profile->nono_profile);
     }
+    printf("  nono_allow_gpu: %s\n", profile->nono_allow_gpu ? "true" : "false");
     printf("  touch_policy: %s\n", profile->touch_policy);
     printf("  target_kind: %s\n", profile->target_kind);
     printf("  target: %s\n", profile->target);
@@ -638,6 +652,11 @@ bondage_main(int argc, char **argv)
 
   if (options.help) {
     bondage_usage(stdout, argv[0]);
+    return 0;
+  }
+
+  if (options.version) {
+    printf("bondage %s\n", BONDAGE_VERSION);
     return 0;
   }
 
