@@ -13,6 +13,10 @@
 #include "repin.h"
 #include "verify.h"
 
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#endif
+
 enum bondage_repin_section {
   BONDAGE_REPIN_SECTION_NONE = 0,
   BONDAGE_REPIN_SECTION_GLOBAL,
@@ -837,6 +841,212 @@ bondage_write_line(FILE *out, const char *key, const char *value,
   return 1;
 }
 
+/*
+ * Same-version-path fingerprint changes are a tamper signal, not a routine
+ * upgrade: repair refuses them and requires the operator to investigate and
+ * run `bondage repin` / `bondage repin-globals` manually.
+ */
+static int
+bondage_plan_has_unsafe_change(const struct bondage_config *config,
+                               const struct bondage_repin_plan *plan,
+                               char *reason, size_t reasonsz)
+{
+  if (plan->global_nono.active &&
+      config->global.nono != NULL &&
+      strcmp(config->global.nono, plan->global_nono.value) == 0 &&
+      bondage_value_update_needed(&plan->global_nono_fp, config->global.nono_fp)) {
+    snprintf(reason, reasonsz, "global nono fingerprint changed but path %s is unchanged",
+             plan->global_nono.value);
+    return 1;
+  }
+  if (plan->global_envchain.active &&
+      config->global.envchain != NULL &&
+      strcmp(config->global.envchain, plan->global_envchain.value) == 0 &&
+      bondage_value_update_needed(&plan->global_envchain_fp, config->global.envchain_fp)) {
+    snprintf(reason, reasonsz, "global envchain fingerprint changed but path %s is unchanged",
+             plan->global_envchain.value);
+    return 1;
+  }
+  if (plan->global_touchid.active &&
+      config->global.touchid != NULL &&
+      strcmp(config->global.touchid, plan->global_touchid.value) == 0 &&
+      bondage_value_update_needed(&plan->global_touchid_fp, config->global.touchid_fp)) {
+    snprintf(reason, reasonsz, "global touchid fingerprint changed but path %s is unchanged",
+             plan->global_touchid.value);
+    return 1;
+  }
+
+  if (plan->target.active && plan->target.old_path != NULL &&
+      plan->target.new_path != NULL &&
+      strcmp(plan->target.old_path, plan->target.new_path) == 0) {
+    snprintf(reason, reasonsz,
+             "target fingerprint changed but path %s is unchanged",
+             plan->target.new_path);
+    return 1;
+  }
+  if (plan->interpreter.active && plan->interpreter.old_path != NULL &&
+      plan->interpreter.new_path != NULL &&
+      strcmp(plan->interpreter.old_path, plan->interpreter.new_path) == 0) {
+    snprintf(reason, reasonsz,
+             "interpreter fingerprint changed but path %s is unchanged",
+             plan->interpreter.new_path);
+    return 1;
+  }
+  if (plan->package_root.active && plan->package_root.old_path != NULL &&
+      plan->package_root.new_path != NULL &&
+      strcmp(plan->package_root.old_path, plan->package_root.new_path) == 0) {
+    snprintf(reason, reasonsz,
+             "package_root fingerprint changed but path %s is unchanged",
+             plan->package_root.new_path);
+    return 1;
+  }
+
+  return 0;
+}
+
+static int
+bondage_copy_value_update(struct bondage_value_update *dst,
+                          const struct bondage_value_update *src,
+                          char *errbuf, size_t errbufsz)
+{
+  char *copy;
+
+  if (!src->active) return 1;
+  copy = bondage_xstrdup(src->value);
+  if (copy == NULL) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+  free(dst->value);
+  dst->active = 1;
+  dst->value = copy;
+  return 1;
+}
+
+static int
+bondage_merge_named_list(struct bondage_named_list *dst,
+                         const struct bondage_named_list *src,
+                         char *errbuf, size_t errbufsz)
+{
+  size_t i;
+
+  for (i = 0; i < src->count; i++) {
+    if (bondage_named_list_contains(dst, src->items[i])) continue;
+    if (!bondage_named_list_append(dst, src->items[i], errbuf, errbufsz)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int
+bondage_copy_profile_field_update(struct bondage_profile_field_update *dst,
+                                  const struct bondage_profile_field_update *src,
+                                  char *errbuf, size_t errbufsz)
+{
+  if (!src->active) return 1;
+
+  if (dst->active) {
+    /* Same shared field seen from another profile; merge profile lists. */
+    if (!bondage_merge_named_list(&dst->path_profiles, &src->path_profiles,
+                                  errbuf, errbufsz)) return 0;
+    if (!bondage_merge_named_list(&dst->fp_profiles, &src->fp_profiles,
+                                  errbuf, errbufsz)) return 0;
+    return 1;
+  }
+
+  dst->active = 1;
+  dst->old_path = bondage_xstrdup(src->old_path);
+  dst->new_path = bondage_xstrdup(src->new_path);
+  dst->new_fp = bondage_xstrdup(src->new_fp);
+  if ((src->old_path != NULL && dst->old_path == NULL) ||
+      (src->new_path != NULL && dst->new_path == NULL) ||
+      (src->new_fp != NULL && dst->new_fp == NULL)) {
+    bondage_set_error(errbuf, errbufsz, "out of memory");
+    return 0;
+  }
+  if (!bondage_copy_field_owner(&dst->path_owner, &src->path_owner,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_field_owner(&dst->fp_owner, &src->fp_owner,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_merge_named_list(&dst->path_profiles, &src->path_profiles,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_merge_named_list(&dst->fp_profiles, &src->fp_profiles,
+                                errbuf, errbufsz)) return 0;
+  return 1;
+}
+
+static int
+bondage_merge_plan(struct bondage_repin_plan *combined,
+                   const struct bondage_repin_plan *addition,
+                   char *errbuf, size_t errbufsz)
+{
+  if (!bondage_copy_value_update(&combined->global_nono, &addition->global_nono,
+                                 errbuf, errbufsz)) return 0;
+  if (!bondage_copy_value_update(&combined->global_nono_fp,
+                                 &addition->global_nono_fp,
+                                 errbuf, errbufsz)) return 0;
+  if (!bondage_copy_value_update(&combined->global_envchain,
+                                 &addition->global_envchain,
+                                 errbuf, errbufsz)) return 0;
+  if (!bondage_copy_value_update(&combined->global_envchain_fp,
+                                 &addition->global_envchain_fp,
+                                 errbuf, errbufsz)) return 0;
+  if (!bondage_copy_value_update(&combined->global_touchid,
+                                 &addition->global_touchid,
+                                 errbuf, errbufsz)) return 0;
+  if (!bondage_copy_value_update(&combined->global_touchid_fp,
+                                 &addition->global_touchid_fp,
+                                 errbuf, errbufsz)) return 0;
+
+  if (!bondage_copy_profile_field_update(&combined->target, &addition->target,
+                                         errbuf, errbufsz)) return 0;
+  if (!bondage_copy_profile_field_update(&combined->interpreter,
+                                         &addition->interpreter,
+                                         errbuf, errbufsz)) return 0;
+  if (!bondage_copy_profile_field_update(&combined->package_root,
+                                         &addition->package_root,
+                                         errbuf, errbufsz)) return 0;
+
+  return 1;
+}
+
+static int
+bondage_confirm_repair(void)
+{
+  char answer[16];
+  size_t len;
+
+  if (!isatty(STDIN_FILENO) || !isatty(fileno(stdout))) {
+    fprintf(stderr,
+            "bondage: repair requires an interactive terminal; "
+            "run `bondage doctor` and apply the suggested repin commands manually\n");
+    return 0;
+  }
+
+  printf("\nType 'yes' to apply these repins: ");
+  fflush(stdout);
+
+  if (fgets(answer, sizeof(answer), stdin) == NULL) {
+    fprintf(stderr, "\nbondage: repair aborted (no confirmation)\n");
+    return 0;
+  }
+
+  len = strlen(answer);
+  while (len > 0 && (answer[len - 1] == '\n' || answer[len - 1] == '\r' ||
+                     answer[len - 1] == ' ' || answer[len - 1] == '\t')) {
+    answer[--len] = '\0';
+  }
+
+  if (strcmp(answer, "yes") != 0) {
+    fprintf(stderr, "bondage: repair aborted (confirmation was '%s', expected 'yes')\n",
+            answer);
+    return 0;
+  }
+
+  return 1;
+}
+
 static int
 bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan *plan,
                        char *errbuf, size_t errbufsz)
@@ -1490,6 +1700,213 @@ bondage_repin(const char *profile_name, const char *config_path)
   printf("status: repinned\n");
 
   bondage_repin_plan_free(&plan);
+  bondage_config_free(&config);
+  bondage_config_free(&verify_config);
+  return 0;
+}
+
+static void
+bondage_print_repair_global_plan(const char *label,
+                                 const char *configured,
+                                 const struct bondage_value_update *update)
+{
+  if (!update->active || configured == NULL) return;
+  if (strcmp(configured, update->value) == 0) return;
+  printf("  bless global %s:\n", label);
+  printf("    configured: %s\n", configured);
+  printf("    current:    %s\n", update->value);
+}
+
+static void
+bondage_print_repair_field_plan(const char *label,
+                                const struct bondage_profile_field_update *update)
+{
+  if (!update->active || update->old_path == NULL || update->new_path == NULL) {
+    return;
+  }
+  if (strcmp(update->old_path, update->new_path) == 0) return;
+  printf("  bless %s", label);
+  if (update->path_owner.kind == BONDAGE_OWNER_DEFAULT &&
+      update->path_owner.name != NULL) {
+    printf(" (defaults \"%s\"", update->path_owner.name);
+    if (update->path_profiles.count > 0) {
+      printf(", used by profiles:");
+      bondage_print_named_list(&update->path_profiles);
+      printf(")");
+    }
+    else {
+      printf(")");
+    }
+  }
+  else if (update->path_profiles.count > 0) {
+    printf(" (profiles:");
+    bondage_print_named_list(&update->path_profiles);
+    printf(")");
+  }
+  printf(":\n");
+  printf("    configured: %s\n", update->old_path);
+  printf("    current:    %s\n", update->new_path);
+}
+
+int
+bondage_repair(const char *config_path)
+{
+  struct bondage_config config;
+  struct bondage_config verify_config;
+  struct bondage_repin_plan global_plan;
+  struct bondage_repin_plan combined;
+  char errbuf[256];
+  char unsafe_reason[512];
+  size_t i;
+  int any_change = 0;
+
+  memset(&global_plan, 0, sizeof(global_plan));
+  memset(&combined, 0, sizeof(combined));
+  bondage_config_init(&config);
+  bondage_config_init(&verify_config);
+
+  if (!bondage_config_load(config_path, &config, errbuf, sizeof(errbuf))) {
+    fprintf(stderr, "bondage: %s\n", errbuf);
+    return 1;
+  }
+
+  if (!bondage_build_global_plan(&config, &global_plan, errbuf, sizeof(errbuf))) {
+    fprintf(stderr, "bondage: %s\n", errbuf);
+    bondage_repin_plan_free(&global_plan);
+    bondage_config_free(&config);
+    return 1;
+  }
+
+  if (!bondage_merge_plan(&combined, &global_plan, errbuf, sizeof(errbuf))) {
+    fprintf(stderr, "bondage: %s\n", errbuf);
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    return 1;
+  }
+
+  for (i = 0; i < config.profile_count; i++) {
+    struct bondage_repin_plan plan;
+
+    memset(&plan, 0, sizeof(plan));
+    if (!bondage_build_repin_plan(&config, &config.profiles[i], &plan,
+                                  errbuf, sizeof(errbuf))) {
+      printf("  skip profile %s: %s\n", config.profiles[i].name, errbuf);
+      bondage_repin_plan_free(&plan);
+      continue;
+    }
+    if (bondage_profile_has_changes(&config.profiles[i], &plan)) {
+      if (!bondage_merge_plan(&combined, &plan, errbuf, sizeof(errbuf))) {
+        fprintf(stderr, "bondage: %s\n", errbuf);
+        bondage_repin_plan_free(&plan);
+        bondage_repin_plan_free(&global_plan);
+        bondage_repin_plan_free(&combined);
+        bondage_config_free(&config);
+        return 1;
+      }
+    }
+    bondage_repin_plan_free(&plan);
+  }
+
+  printf("bondage repair plan for %s:\n", config_path);
+
+  bondage_print_repair_global_plan("nono", config.global.nono,
+                                   &combined.global_nono);
+  bondage_print_repair_global_plan("envchain", config.global.envchain,
+                                   &combined.global_envchain);
+  bondage_print_repair_global_plan("touchid", config.global.touchid,
+                                   &combined.global_touchid);
+  bondage_print_repair_field_plan("target", &combined.target);
+  bondage_print_repair_field_plan("interpreter", &combined.interpreter);
+  bondage_print_repair_field_plan("package_root", &combined.package_root);
+
+  if (bondage_plan_has_global_changes(&config, &combined)) any_change = 1;
+  if (combined.target.active || combined.interpreter.active ||
+      combined.package_root.active) {
+    /* A field update can still be a no-op per profile; check via _needed. */
+    for (i = 0; i < config.profile_count; i++) {
+      if (bondage_profile_has_changes(&config.profiles[i], &combined)) {
+        any_change = 1;
+        break;
+      }
+    }
+  }
+
+  if (!any_change) {
+    printf("  nothing to do\n");
+    printf("status: clean\n");
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    return 0;
+  }
+
+  if (bondage_plan_has_unsafe_change(&config, &combined,
+                                     unsafe_reason, sizeof(unsafe_reason))) {
+    fprintf(stderr,
+            "\nbondage: WARNING: %s.\n"
+            "This is not a routine package-manager upgrade. repair refuses to\n"
+            "bless it. Investigate the change, then run `bondage repin` or\n"
+            "`bondage repin-globals` manually if it is expected.\n",
+            unsafe_reason);
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    return 1;
+  }
+
+  if (!bondage_confirm_repair()) {
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    return 1;
+  }
+
+  if (!bondage_rewrite_config(config_path, &combined, errbuf, sizeof(errbuf))) {
+    fprintf(stderr, "bondage: %s\n", errbuf);
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    return 1;
+  }
+
+  if (!bondage_config_load(config_path, &verify_config, errbuf, sizeof(errbuf))) {
+    fprintf(stderr, "bondage: repair wrote invalid config: %s\n", errbuf);
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    bondage_config_free(&verify_config);
+    return 1;
+  }
+
+  if (bondage_plan_has_global_changes(&verify_config, &combined)) {
+    fprintf(stderr, "bondage: repair verification failed (globals still stale)\n");
+    bondage_repin_plan_free(&global_plan);
+    bondage_repin_plan_free(&combined);
+    bondage_config_free(&config);
+    bondage_config_free(&verify_config);
+    return 1;
+  }
+
+  for (i = 0; i < verify_config.profile_count; i++) {
+    const struct bondage_profile *profile = &verify_config.profiles[i];
+    if (!bondage_verify_profile(&verify_config, profile, NULL,
+                                errbuf, sizeof(errbuf))) {
+      fprintf(stderr, "bondage: repair verification failed for profile %s: %s\n",
+              profile->name, errbuf);
+      bondage_repin_plan_free(&global_plan);
+      bondage_repin_plan_free(&combined);
+      bondage_config_free(&config);
+      bondage_config_free(&verify_config);
+      return 1;
+    }
+  }
+
+  bondage_print_repin_summary(&combined);
+  printf("status: repaired\n");
+
+  bondage_repin_plan_free(&global_plan);
+  bondage_repin_plan_free(&combined);
   bondage_config_free(&config);
   bondage_config_free(&verify_config);
   return 0;

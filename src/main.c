@@ -46,6 +46,7 @@ enum bondage_command_kind {
   BONDAGE_CMD_VERIFY,
   BONDAGE_CMD_REPIN,
   BONDAGE_CMD_REPIN_GLOBALS,
+  BONDAGE_CMD_REPAIR,
   BONDAGE_CMD_ARGV,
   BONDAGE_CMD_EXEC,
   BONDAGE_CMD_HASH_FILE,
@@ -69,6 +70,7 @@ static const struct bondage_command bondage_commands[] = {
   {"verify", BONDAGE_CMD_VERIFY},
   {"repin", BONDAGE_CMD_REPIN},
   {"repin-globals", BONDAGE_CMD_REPIN_GLOBALS},
+  {"repair", BONDAGE_CMD_REPAIR},
   {"chain", BONDAGE_CMD_ARGV},
   {"argv", BONDAGE_CMD_ARGV},
   {"exec", BONDAGE_CMD_EXEC},
@@ -87,6 +89,7 @@ bondage_usage(FILE *stream, const char *progname)
           "  %s [--config <path>] verify <profile> [config]\n"
           "  %s [--config <path>] repin <profile> [config]\n"
           "  %s [--config <path>] repin-globals [config]\n"
+          "  %s [--config <path>] repair [config]\n"
           "  %s [--config <path>] chain <profile> [config] [-- args...]\n"
           "  %s [--config <path>] exec <profile> [config] [-- args...]\n"
           "  %s [--config <path>] argv <profile> [config] [-- args...]  (alias for chain)\n"
@@ -97,7 +100,7 @@ bondage_usage(FILE *stream, const char *progname)
           "  -c, --config <path>  Read this bondage config file.\n"
           "  -h, --help           Show this help.\n",
           progname, progname, progname, progname, progname, progname, progname,
-          progname, progname, progname);
+          progname, progname, progname, progname);
 }
 
 static void
@@ -710,6 +713,27 @@ bondage_main(int argc, char **argv)
       return 2;
     }
     return bondage_repin_globals(config_path);
+
+  case BONDAGE_CMD_REPAIR:
+    if (command_argc >= 1 &&
+        (strcmp(command_argv[0], "--help") == 0 || strcmp(command_argv[0], "-h") == 0)) {
+      fprintf(stderr,
+              "Usage:\n"
+              "  %s [--config <path>] repair [config]\n\n"
+              "Interactive batch repair. Analyzes every pin, shows the full plan,\n"
+              "and applies all routine package-manager upgrades after you type\n"
+              "'yes'. Refuses to run non-interactively and refuses same-version\n"
+              "fingerprint changes (possible tampering) - investigate those with\n"
+              "`bondage doctor` and apply `bondage repin` manually if expected.\n",
+              argv[0]);
+      return 0;
+    }
+    if (!bondage_consume_optional_config(command_argc, command_argv, 0,
+                                         options.config_path, &config_path)) {
+      bondage_usage(stderr, argv[0]);
+      return 2;
+    }
+    return bondage_repair(config_path);
 
   case BONDAGE_CMD_ARGV:
   case BONDAGE_CMD_EXEC:

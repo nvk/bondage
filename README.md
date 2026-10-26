@@ -337,6 +337,20 @@ In practice:
 `doctor` is the non-mutating pass. It checks the whole config, exits nonzero on
 stale or broken pins, and tells you which repair command to run next.
 
+`repair` is the interactive batch pass. It runs the same analysis, prints every
+pending repin as one plan, asks for a typed `yes` on a real terminal, and then
+applies the changes atomically. It refuses two things on purpose:
+
+- non-interactive use (piped answers, scripts, CI), because blessing a new
+  binary must stay a human decision
+- same-version fingerprint changes, because a binary whose hash changed
+  without a version move is a tamper signal, not a package-manager upgrade;
+  those stay manual via `repin` / `repin-globals` after you investigate
+
+Everything `repair` blesses is a change you could already bless manually; it
+only removes the copy-paste between `doctor` and the individual `repin`
+commands.
+
 `repin-globals` is the narrow maintenance command for shared helpers only. Use
 it when the drift is in `nono`, `envchain`, or `touchid-check`, not in a tool
 family itself.
