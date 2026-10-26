@@ -368,6 +368,23 @@ cleanup:
   return ok;
 }
 
+static const char *
+bondage_env_command_expected_fp(const struct bondage_profile *profile,
+                                const char *name)
+{
+  size_t i;
+  size_t name_len = strlen(name);
+
+  for (i = 0; i < profile->env_command_fp.count; i++) {
+    const char *entry = profile->env_command_fp.items[i];
+    if (strncmp(entry, name, name_len) == 0 && entry[name_len] == '=') {
+      return entry + name_len + 1;
+    }
+  }
+
+  return NULL;
+}
+
 static void
 bondage_free_argv_list(char **argv, size_t argc)
 {
@@ -433,13 +450,17 @@ bondage_resolve_nono_profile_arg(const struct bondage_config *config,
 }
 
 static int
-bondage_capture_command_output(const char *command_spec,
+bondage_capture_command_output(const struct bondage_profile *profile,
+                               const char *env_name,
+                               const char *command_spec,
                                char **value_out,
                                char *errbuf,
                                size_t errbufsz)
 {
   char **argv = NULL;
   size_t argc = 0;
+  const char *expected_fp;
+  char actual_fp[256];
   int pipefd[2];
   pid_t pid;
   char *buffer = NULL;
@@ -450,6 +471,21 @@ bondage_capture_command_output(const char *command_spec,
 
   if (!bondage_split_command(command_spec, &argv, &argc, errbuf, errbufsz)) {
     return 0;
+  }
+
+  expected_fp = bondage_env_command_expected_fp(profile, env_name);
+  if (expected_fp != NULL) {
+    if (!bondage_hash_file_path(argv[0], 1, actual_fp, sizeof(actual_fp),
+                                errbuf, errbufsz)) {
+      goto cleanup;
+    }
+    if (strcmp(expected_fp, actual_fp) != 0) {
+      bondage_set_error(errbuf, errbufsz,
+                        "env_command %s fingerprint mismatch for %s: "
+                        "expected=%s actual=%s",
+                        env_name, argv[0], expected_fp, actual_fp);
+      goto cleanup;
+    }
   }
 
   if (pipe(pipefd) < 0) {
@@ -586,7 +622,8 @@ bondage_build_envp(const struct bondage_config *config,
       goto cleanup;
     }
 
-    if (!bondage_capture_command_output(eq + 1, &value, errbuf, errbufsz)) {
+    if (!bondage_capture_command_output(profile, name, eq + 1, &value,
+                                        errbuf, errbufsz)) {
       free(name);
       goto cleanup;
     }

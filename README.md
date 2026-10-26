@@ -270,6 +270,22 @@ Only inherit those defaults into profiles that are still protected by the
 outer sandbox layer. Do not inherit dangerous target-permission flags into a
 rawdog/no-`nono` profile unless that is the explicit purpose of the profile.
 
+`env_command` helpers run inside the trusted launcher before `nono` starts, so
+pin their binaries when the value matters:
+
+```ini
+[defaults "github-env"]
+env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
+env_command_fp = GH_TOKEN=sha256:...
+env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
+env_command_fp = GITHUB_TOKEN=sha256:...
+```
+
+When `env_command_fp` is present for a name, `bondage` re-hashes the helper
+binary and fails closed on mismatch before executing it. `env_command_fp`
+entries must cover every `env_command` entry when used, and they inherit like
+any other list key.
+
 `status`, `verify`, `doctor`, and `repin` report where inherited pin fields
 come from. If `repin codex` refreshes `defaults "codex-target"`, every profile
 that inherits that defaults block gets the new pin. The shared ownership is the

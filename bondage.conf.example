@@ -17,7 +17,9 @@ nono_read_file = /dev/urandom
 
 [defaults "github-env"]
 env_command = GH_TOKEN=/opt/homebrew/bin/gh auth token
+env_command_fp = GH_TOKEN=sha256:replace-me
 env_command = GITHUB_TOKEN=/opt/homebrew/bin/gh auth token
+env_command_fp = GITHUB_TOKEN=sha256:replace-me
 
 [defaults "claude-auto"]
 target_arg = --permission-mode

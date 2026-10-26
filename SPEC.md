@@ -71,6 +71,9 @@ Implemented now:
 - `nono` flag injection
 - target argument injection for stable tool startup policy
 - static env injection and command-derived env vars
+- optional `env_command_fp = NAME=sha256:...` entries fingerprint-pin the
+  helper binary executed by the matching `env_command = NAME=/absolute/cmd`;
+  pinned helpers are re-hashed and fail closed before execution
 - Touch ID / local auth launch policy
 - prelaunch directory creation
 - `execve()` launch for native and script targets

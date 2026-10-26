@@ -230,6 +230,7 @@ bondage_free_profile(struct bondage_profile *profile)
   bondage_free_string_list(&profile->target_args);
   bondage_free_string_list(&profile->env_set);
   bondage_free_string_list(&profile->env_command);
+  bondage_free_string_list(&profile->env_command_fp);
   bondage_free_string_list(&profile->ensure_dir);
   bondage_free_field_owner(&profile->target_owner);
   bondage_free_field_owner(&profile->target_fp_owner);
@@ -508,6 +509,9 @@ bondage_assign_profile(struct bondage_profile *profile, const char *key,
   if (strcmp(key, "env_command") == 0) {
     return bondage_string_list_append(&profile->env_command, value, errbuf, errbufsz);
   }
+  if (strcmp(key, "env_command_fp") == 0) {
+    return bondage_string_list_append(&profile->env_command_fp, value, errbuf, errbufsz);
+  }
   if (strcmp(key, "ensure_dir") == 0) {
     return bondage_string_list_append(&profile->ensure_dir, value, errbuf, errbufsz);
   }
@@ -622,6 +626,8 @@ bondage_apply_profile_values(struct bondage_profile *dst,
   if (!bondage_copy_string_list(&dst->env_set, &src->env_set,
                                 errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->env_command, &src->env_command,
+                                errbuf, errbufsz)) return 0;
+  if (!bondage_copy_string_list(&dst->env_command_fp, &src->env_command_fp,
                                 errbuf, errbufsz)) return 0;
   if (!bondage_copy_string_list(&dst->ensure_dir, &src->ensure_dir,
                                 errbuf, errbufsz)) return 0;
@@ -848,6 +854,23 @@ bondage_validate_profile(const struct bondage_profile *profile, char *errbuf,
     if (!bondage_string_has_key_value(profile->env_command.items[i])) {
       bondage_set_error(errbuf, errbufsz,
                         "profile '%s' env_command requires NAME=/absolute/cmd ...",
+                        profile->name);
+      return 0;
+    }
+  }
+
+  if (profile->env_command_fp.count != 0 &&
+      profile->env_command_fp.count != profile->env_command.count) {
+    bondage_set_error(errbuf, errbufsz,
+                      "profile '%s' env_command_fp count must match env_command count",
+                      profile->name);
+    return 0;
+  }
+
+  for (i = 0; i < profile->env_command_fp.count; i++) {
+    if (!bondage_string_has_key_value(profile->env_command_fp.items[i])) {
+      bondage_set_error(errbuf, errbufsz,
+                        "profile '%s' env_command_fp requires NAME=sha256:...",
                         profile->name);
       return 0;
     }

@@ -29,6 +29,7 @@ src/%.o: src/%.c include/config.h include/launch.h include/main.h include/repin.
 test: all
 	./tests/test-config-defaults.sh
 	./tests/test-cli-options.sh
+	./tests/test-env-command-pinning.sh
 
 clean:
 	rm -f $(BIN) touchid-check src/*.o
