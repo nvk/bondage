@@ -56,6 +56,7 @@ struct bondage_profile {
   struct bondage_string_list target_args;
   struct bondage_string_list env_set;
   struct bondage_string_list env_command;
+  struct bondage_string_list env_command_fp;
   struct bondage_string_list ensure_dir;
   struct bondage_field_owner target_owner;
   struct bondage_field_owner target_fp_owner;

@@ -1,3 +1,5 @@
 bondage
 src/*.o
 bondage.conf
+touchid-check
+*.plist

@@ -871,7 +871,7 @@ bondage_rewrite_config(const char *config_path, const struct bondage_repin_plan 
     bondage_set_error(errbuf, errbufsz, "out of memory");
     goto cleanup;
   }
-  sprintf(tmp_path, "%s.tmpXXXXXX", config_path);
+  snprintf(tmp_path, strlen(config_path) + 16, "%s.tmpXXXXXX", config_path);
 
   fd = mkstemp(tmp_path);
   if (fd < 0) {
